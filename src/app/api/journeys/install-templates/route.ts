@@ -130,8 +130,7 @@ export async function POST(request: NextRequest) {
         const inserts = JOURNEY_TEMPLATES.map(tpl => ({
             ...tpl,
             tenant_id: profile.tenant_id,
-            status: 'draft',
-            created_by: user.id
+            status: 'draft'
         }));
 
         const { data, error } = await supabase.from('journeys').insert(inserts).select();
