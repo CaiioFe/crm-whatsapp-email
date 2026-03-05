@@ -1,0 +1,111 @@
+// ============================================================
+// CRM WhatsApp & Email — API: Email Templates
+// Path: src/app/api/email-templates/route.ts
+// ============================================================
+
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) { return cookieStore.get(name)?.value },
+                set(name: string, value: string, options: any) { cookieStore.set({ name, value, ...options }) },
+                remove(name: string, options: any) { cookieStore.set({ name, value: "", ...options }) },
+            },
+        }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Response("Unauthorized", { status: 401 });
+
+    const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
+
+    if (!profile) return new Response("Profile not found", { status: 404 });
+
+    const { data, error } = await supabase
+        .from("email_templates")
+        .select("*")
+        .eq("tenant_id", profile.tenant_id)
+        .eq("is_archived", false)
+        .order("created_at", { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json(data);
+}
+
+export async function POST(req: Request) {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) { return cookieStore.get(name)?.value },
+                set(name: string, value: string, options: any) { cookieStore.set({ name, value, ...options }) },
+                remove(name: string, options: any) { cookieStore.set({ name, value: "", ...options }) },
+            },
+        }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Response("Unauthorized", { status: 401 });
+
+    const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
+
+    if (!profile) return new Response("Profile not found", { status: 404 });
+
+    const json = await req.json();
+
+    // If updating (has ID)
+    if (json.id) {
+        const { data, error } = await supabase
+            .from("email_templates")
+            .update({
+                name: json.name,
+                subject: json.subject,
+                blocks: json.blocks,
+                styles: json.styles,
+                variables: json.variables,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", json.id)
+            .eq("tenant_id", profile.tenant_id)
+            .select()
+            .single();
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(data);
+    }
+
+    // Creating new
+    const { data, error } = await supabase
+        .from("email_templates")
+        .insert({
+            tenant_id: profile.tenant_id,
+            name: json.name || "Novo Template",
+            subject: json.subject || "",
+            blocks: json.blocks || [],
+            styles: json.styles || {},
+            variables: json.variables || [],
+        })
+        .select()
+        .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
+}

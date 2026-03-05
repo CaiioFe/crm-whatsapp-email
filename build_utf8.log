@@ -1,0 +1,81 @@
+﻿
+> crm-whatsapp-email@0.1.0 build
+> next build
+
+Ôû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+node.exe : ÔÜá The "middleware" file 
+convention is deprecated. Please use 
+"proxy" instead. Learn more: https://nex
+tjs.org/docs/messages/middleware-to-prox
+y
+No C:\Program Files\nodejs\npm.ps1:29 
+caractere:3
++   & $NODE_EXE $NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecif 
+   ied: (ÔÜá The "middle...leware-to-p  
+  roxy:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCom 
+   mandError
+ 
+  Creating an optimized production build ...
+Ô£ô Compiled successfully in 5.5s
+  Running TypeScript ...
+Failed to compile.
+
+./src/app/(dashboard)/campaigns/template
+s/editor/page.tsx:221:78
+Type error: Argument of type '{ text: 
+string; src?: undefined; alt?: 
+undefined; url?: undefined; left?: 
+undefined; right?: undefined; } | { 
+src: string; alt: string; text?: 
+undefined; url?: undefined; left?: 
+undefined; right?: undefined; } | { 
+...; } | { ...; } | { ...; } | { ...; 
+}' is not assignable to parameter of 
+type 'Record<string, string>'.
+  Type '{ text: string; src?: 
+undefined; alt?: undefined; url?: 
+undefined; left?: undefined; right?: 
+undefined; }' is not assignable to type 
+'Record<string, string>'.
+    Property 'src' is incompatible with 
+index signature.
+      Type 'undefined' is not 
+assignable to type 'string'.
+
+[0m [90m 219 |[39m                   
+                      
+[33m<[39m[33mbutton[39m
+ [90m 220 |[39m                       
+                      
+key[33m=[39m{bt[33m.[39mtype}
+[31m[1m>[22m[39m[90m 221 |[39m    
+                                        
+ onClick[33m=[39m{() [33m=>[39m 
+addBlock(bt[33m.[39mtype[33m,[39m 
+bt[33m.[39mdefaultContent)}
+ [90m     |[39m                       
+                                        
+               [31m[1m^[22m[39m
+ [90m 222 |[39m                       
+                      
+className[33m=[39m[32m"flex flex-col 
+items-center gap-1.5 p-3 rounded-lg 
+border text-xs transition-all"[39m
+ [90m 223 |[39m                       
+                      
+style[33m=[39m{{ 
+borderColor[33m:[39m 
+[32m"var(--border)"[39m[33m,[39m 
+color[33m:[39m 
+[32m"var(--text-secondary)"[39m }}
+ [90m 224 |[39m                       
+                      
+onMouseEnter[33m=[39m{(e) 
+[33m=>[39m {[0m
+Next.js build worker exited with code: 
+1 and signal: null

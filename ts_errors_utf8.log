@@ -1,0 +1,5 @@
+﻿src/app/(dashboard)/journeys/editor/page.tsx(67,17): error TS2353: Object literal may only specify known properties, and 'ringColor' does not exist in type 'Properties<string | number, string & {}>'.
+src/app/(dashboard)/journeys/editor/page.tsx(83,17): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/import/StepUpload.tsx(31,32): error TS2345: Argument of type 'Record<string, string>' is not assignable to parameter of type 'Record<string, "" | LeadFieldKey>'.
+  'string' index signatures are incompatible.
+    Type 'string' is not assignable to type '"" | LeadFieldKey'.
