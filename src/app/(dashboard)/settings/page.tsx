@@ -155,17 +155,29 @@ export default function SettingsPage() {
             const res = await fetch("/api/whatsapp/evolution/connect");
             const data = await res.json();
 
-            if (data.instance?.state === "open" || data.instance?.status === "open") {
+            console.log("[SETTINGS] Evolution Status Check:", data);
+
+            // Evolution API versions vary. Checking common "connected" signals.
+            const isConnected =
+                data.instance?.state === "open" ||
+                data.instance?.status === "open" ||
+                data.state === "open" ||
+                data.status === "open" ||
+                data.connectionStatus === "open";
+
+            if (isConnected) {
                 updateConfig("evolution", { status: "connected" }, "whatsapp");
                 setQrCode(null);
-                toast.success("WhatsApp Conectado e Ativo!");
+                toast.success("Conectado com Sucesso!");
             } else {
                 updateConfig("evolution", { status: "error" }, "whatsapp");
-                toast.error("Instância não está conectada. Gere o QR Code.");
+                const msg = data.error || data.message || "A instância não está conectada ao celular.";
+                toast.error(`Falha: ${msg}`);
             }
         } catch (err) {
+            console.error("[SETTINGS] Evolution Status Error:", err);
             updateConfig("evolution", { status: "error" }, "whatsapp");
-            toast.error("Não foi possível verificar a instância.");
+            toast.error("Erro técnico ao tentar falar com a Evolution API.");
         }
     };
 

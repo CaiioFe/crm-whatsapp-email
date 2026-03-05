@@ -104,10 +104,14 @@ export async function GET(
         const baseUrl = config.api_url.replace(/\/$/, "");
 
         if (action === "connect") {
+            console.log(`[EVOLUTION PROXY] Checking connection for instance: ${config.instance_name}`);
             const response = await fetch(`${baseUrl}/instance/connect/${config.instance_name}`, {
                 headers: { "apikey": config.api_key_encrypted }
             });
+
             const data = await response.json();
+            console.log(`[EVOLUTION PROXY] Response:`, data);
+
             return new Response(JSON.stringify(data), { status: response.status });
         }
 
