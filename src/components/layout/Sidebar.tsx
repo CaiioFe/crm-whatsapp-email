@@ -15,9 +15,11 @@ import {
     X,
     Sun,
     Moon,
+    ShieldCheck,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@/components/ui/ThemeProvider";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -34,6 +36,35 @@ export function Sidebar() {
     const pathname = usePathname();
     const [mobileOpen, setMobileOpen] = useState(false);
     const { theme, toggleTheme } = useTheme();
+    const [profile, setProfile] = useState<{ display_name: string; role: string; tenant_name?: string } | null>(null);
+
+    useEffect(() => {
+        const loadProfile = async () => {
+            const supabase = createSupabaseBrowserClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data } = await supabase
+                .from('user_profiles')
+                .select('display_name, role, tenants(name)')
+                .eq('user_id', user.id)
+                .single();
+
+            if (data) {
+                setProfile({
+                    display_name: data.display_name,
+                    role: data.role,
+                    tenant_name: (data.tenants as any)?.name
+                });
+            }
+        };
+        loadProfile();
+    }, []);
+
+    const navItems = [...NAV_ITEMS];
+    if (profile?.role === 'admin') {
+        navItems.push({ href: "/admin", label: "Admin", icon: ShieldCheck });
+    }
 
     return (
         <>
@@ -84,7 +115,7 @@ export function Sidebar() {
 
                 {/* Navigation */}
                 <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-                    {NAV_ITEMS.map((item) => {
+                    {navItems.map((item) => {
                         const isActive =
                             item.href === "/"
                                 ? pathname === "/"
@@ -148,13 +179,13 @@ export function Sidebar() {
 
                     {/* User */}
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                            U
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-primary to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg">
+                            {profile?.display_name?.charAt(0) || "U"}
                         </div>
-                        <div>
-                            <p className="text-white text-sm font-medium">Usuário</p>
-                            <p className="text-xs" style={{ color: "var(--sidebar-text)" }}>
-                                Plano Free
+                        <div className="overflow-hidden">
+                            <p className="text-white text-sm font-medium truncate">{profile?.display_name || "Carregando..."}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--brand-primary)" }}>
+                                {profile?.role || "Aguardando"}
                             </p>
                         </div>
                     </div>
