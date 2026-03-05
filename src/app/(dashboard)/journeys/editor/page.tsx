@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, Suspense } from "react";
 import {
     ReactFlow,
     Background,
@@ -142,7 +142,7 @@ const PALETTE_ITEMS = [
 // Page Component
 // ============================
 
-export default function JourneyEditorPage() {
+function JourneyEditorContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { success, error, info } = useToast();
@@ -683,5 +683,18 @@ export default function JourneyEditorPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function JourneyEditorPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+                <Loader2 className="animate-spin text-brand-primary" size={40} />
+                <p className="text-sm font-medium text-zinc-500">Preparando editor de jornadas...</p>
+            </div>
+        }>
+            <JourneyEditorContent />
+        </Suspense>
     );
 }
