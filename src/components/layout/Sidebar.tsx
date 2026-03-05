@@ -19,7 +19,9 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTheme } from "@/components/ui/ThemeProvider";
+import { useSidebar } from "./SidebarContext";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -35,6 +37,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
     const pathname = usePathname();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const { isCollapsed, toggleSidebar } = useSidebar();
     const { theme, toggleTheme } = useTheme();
     const [profile, setProfile] = useState<{ display_name: string; role: string; tenant_name?: string } | null>(null);
 
@@ -90,27 +93,37 @@ export function Sidebar() {
             {/* Sidebar */}
             <aside
                 className={`
-          fixed top-0 left-0 h-full z-40 transition-transform duration-300
-          w-64 flex flex-col
+          fixed top-0 left-0 h-full z-40 transition-all duration-300
+          flex flex-col
           md:translate-x-0
+          ${isCollapsed ? "w-20" : "w-64"}
           ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
         `}
                 style={{ background: "var(--sidebar-bg)" }}
             >
+                {/* Collapse toggle (Desktop) */}
+                <button
+                    onClick={toggleSidebar}
+                    className="hidden md:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-brand-primary text-white items-center justify-center shadow-lg hover:scale-110 transition-transform z-50 border-2 border-white/10"
+                >
+                    {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                </button>
                 {/* Logo */}
-                <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
+                <div className={`flex items-center gap-3 py-5 border-b border-white/10 transition-all ${isCollapsed ? "px-5" : "px-6"}`}>
                     <div
-                        className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+                        className="w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center text-white font-bold text-sm"
                         style={{ background: "var(--brand-primary)" }}
                     >
                         CR
                     </div>
-                    <div>
-                        <h1 className="text-white font-semibold text-sm">CRM Hub</h1>
-                        <p className="text-xs" style={{ color: "var(--sidebar-text)" }}>
-                            WhatsApp & Email
-                        </p>
-                    </div>
+                    {!isCollapsed && (
+                        <div className="animate-in fade-in slide-in-from-left-2">
+                            <h1 className="text-white font-semibold text-sm">CRM Hub</h1>
+                            <p className="text-xs" style={{ color: "var(--sidebar-text)" }}>
+                                WhatsApp & Email
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Navigation */}
@@ -128,9 +141,10 @@ export function Sidebar() {
                                 href={item.href}
                                 id={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                                 onClick={() => setMobileOpen(false)}
+                                title={isCollapsed ? item.label : ""}
                                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                  transition-all duration-200
+                  transition-all duration-200 overflow-hidden
                 `}
                                 style={{
                                     color: isActive
@@ -146,8 +160,8 @@ export function Sidebar() {
                                     if (!isActive) e.currentTarget.style.background = "transparent";
                                 }}
                             >
-                                <Icon size={18} />
-                                {item.label}
+                                <Icon size={18} className="flex-shrink-0" />
+                                {!isCollapsed && <span className="animate-in fade-in slide-in-from-left-2">{item.label}</span>}
                             </Link>
                         );
                     })}
@@ -158,36 +172,42 @@ export function Sidebar() {
                     {/* Theme Toggle */}
                     <button
                         onClick={toggleTheme}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all overflow-hidden"
                         style={{ color: "var(--sidebar-text)" }}
                         onMouseEnter={(e) => e.currentTarget.style.background = "var(--sidebar-hover)"}
                         onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                         id="theme-toggle"
+                        title={isCollapsed ? "Trocar Tema" : ""}
                     >
-                        {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-                        {theme === "dark" ? "Modo Claro" : "Modo Escuro"}
-                        <div
-                            className="ml-auto w-9 h-5 rounded-full relative transition-all"
-                            style={{ background: theme === "dark" ? "var(--brand-primary)" : "rgba(255,255,255,0.2)" }}
-                        >
+                        {theme === "dark" ? <Sun size={16} className="flex-shrink-0" /> : <Moon size={16} className="flex-shrink-0" />}
+                        {!isCollapsed && <span className="animate-in fade-in slide-in-from-left-2">{theme === "dark" ? "Modo Claro" : "Modo Escuro"}</span>}
+
+                        {!isCollapsed && (
                             <div
-                                className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-300"
-                                style={{ left: theme === "dark" ? 18 : 2 }}
-                            />
-                        </div>
+                                className="ml-auto w-9 h-5 rounded-full relative transition-all animate-in fade-in"
+                                style={{ background: theme === "dark" ? "var(--brand-primary)" : "rgba(255,255,255,0.2)" }}
+                            >
+                                <div
+                                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-300"
+                                    style={{ left: theme === "dark" ? 18 : 2 }}
+                                />
+                            </div>
+                        )}
                     </button>
 
                     {/* User */}
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-primary to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="w-8 h-8 rounded-full flex-shrink-0 bg-gradient-to-br from-brand-primary to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-lg">
                             {profile?.display_name?.charAt(0) || "U"}
                         </div>
-                        <div className="overflow-hidden">
-                            <p className="text-white text-sm font-medium truncate">{profile?.display_name || "Carregando..."}</p>
-                            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--brand-primary)" }}>
-                                {profile?.role || "Aguardando"}
-                            </p>
-                        </div>
+                        {!isCollapsed && (
+                            <div className="animate-in fade-in slide-in-from-left-2">
+                                <p className="text-white text-sm font-medium truncate">{profile?.display_name || "Carregando..."}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--brand-primary)" }}>
+                                    {profile?.role || "Aguardando"}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </aside>

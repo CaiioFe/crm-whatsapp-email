@@ -405,6 +405,9 @@ function JourneyEditorContent() {
                             }}
                             maskColor="rgba(0,0,0,0.05)"
                             className="!bg-white/80 !backdrop-blur-sm !border !border-white/20 !rounded-xl !shadow-lg"
+                            style={{ height: 100, width: 150 }}
+                            zoomable
+                            pannable
                         />
                     </ReactFlow>
                 </div>
