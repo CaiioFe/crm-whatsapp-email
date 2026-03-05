@@ -39,7 +39,7 @@ const BLOCK_TYPES = [
     { type: "spacer" as const, label: "Espaço", icon: MoveVertical, defaultContent: {} },
 ];
 
-export default function EmailEditorPage() {
+function EmailEditorContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { success, error: toastError } = useToast();
@@ -513,6 +513,21 @@ export default function EmailEditorPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+import { Suspense } from "react";
+
+export default function EmailEditorPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+                <Loader2 className="animate-spin text-brand-primary" size={32} />
+                <p className="text-sm font-medium text-zinc-500">Preparando editor...</p>
+            </div>
+        }>
+            <EmailEditorContent />
+        </Suspense>
     );
 }
 
