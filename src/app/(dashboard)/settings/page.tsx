@@ -107,11 +107,12 @@ export default function SettingsPage() {
     const saveWaConfig = async (provider: string) => {
         const config = whatsappConfigs[provider];
         try {
+            const baseUrl = config.apiUrl?.replace(/\/$/, "");
             const res = await fetch("/api/whatsapp/config", {
                 method: "POST",
                 body: JSON.stringify({
                     provider,
-                    api_url: config.apiUrl,
+                    api_url: baseUrl,
                     api_key: config.apiKey,
                     instance_name: config.instanceName,
                     is_enabled: config.enabled
@@ -150,14 +151,22 @@ export default function SettingsPage() {
 
     const checkEvolutionStatus = async () => {
         try {
+            updateConfig("evolution", { status: "testing" }, "whatsapp");
             const res = await fetch("/api/whatsapp/evolution/connect");
             const data = await res.json();
-            if (data.instance?.status === "open") {
+
+            if (data.instance?.state === "open" || data.instance?.status === "open") {
                 updateConfig("evolution", { status: "connected" }, "whatsapp");
                 setQrCode(null);
-                toast.success("WhatsApp Conectado!");
+                toast.success("WhatsApp Conectado e Ativo!");
+            } else {
+                updateConfig("evolution", { status: "error" }, "whatsapp");
+                toast.error("Instância não está conectada. Gere o QR Code.");
             }
-        } catch (err) { }
+        } catch (err) {
+            updateConfig("evolution", { status: "error" }, "whatsapp");
+            toast.error("Não foi possível verificar a instância.");
+        }
     };
 
     const testConnection = async (provider: string) => {
@@ -427,13 +436,37 @@ export default function SettingsPage() {
                                                     style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-primary)" }}
                                                 />
                                             </div>
-                                            <div className="flex items-end gap-2">
-                                                <button onClick={() => saveWaConfig(prov.id)} className="btn-secondary flex-1 text-xs py-2">
-                                                    <Save size={14} /> Salvar Config
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                <button
+                                                    onClick={() => saveWaConfig(prov.id)}
+                                                    className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-2xl hover:bg-zinc-50 transition-all border-2 border-zinc-100 font-bold"
+                                                >
+                                                    <Save size={16} className="text-zinc-400" />
+                                                    <span>Salvar Configuração</span>
                                                 </button>
-                                                <button onClick={connectEvolution} className="btn-primary flex-1 text-xs py-2">
-                                                    <QrCode size={14} /> Gerar QR Code
+
+                                                <button
+                                                    onClick={checkEvolutionStatus}
+                                                    className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-2xl transition-all border-2 border-brand-primary/20 text-brand-primary font-bold hover:bg-brand-primary/5"
+                                                >
+                                                    <RefreshCw size={16} />
+                                                    <span>Verificar Conexão</span>
                                                 </button>
+
+                                                {!config.status || config.status !== 'connected' ? (
+                                                    <button
+                                                        onClick={connectEvolution}
+                                                        className="btn-primary flex items-center justify-center gap-2 py-3 rounded-2xl shadow-lg shadow-brand-primary/20 font-black uppercase tracking-widest text-[10px]"
+                                                    >
+                                                        <QrCode size={16} />
+                                                        <span>Gerar Novo QR Code</span>
+                                                    </button>
+                                                ) : (
+                                                    <div className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 text-emerald-600 rounded-2xl border-2 border-emerald-100 font-bold text-xs">
+                                                        <CheckCircle size={16} />
+                                                        <span>Instância Ativa</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
