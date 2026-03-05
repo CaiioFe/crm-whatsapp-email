@@ -7,10 +7,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { action: string } }
+    { params }: { params: Promise<{ action: string }> }
 ) {
     try {
-        const { action } = params;
+        const { action } = await params;
         const supabase = await createSupabaseServerClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
@@ -82,10 +82,10 @@ export async function POST(
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { action: string } }
+    { params }: { params: Promise<{ action: string }> }
 ) {
     try {
-        const { action } = params;
+        const { action } = await params;
         const supabase = await createSupabaseServerClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
