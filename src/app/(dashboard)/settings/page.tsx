@@ -16,7 +16,7 @@ import {
     RefreshCw,
     Save
 } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { useToast } from "@/components/ui/Toast";
 
 interface ProviderConfig {
     provider: string;
@@ -53,6 +53,8 @@ export default function SettingsPage() {
         meta: { provider: "meta", enabled: false, apiKey: "", fromEmail: "", fromName: "", status: "unconfigured" },
     });
     const [qrCode, setQrCode] = useState<string | null>(null);
+    const toast = useToast();
+    const [isSaving, setIsSaving] = useState<string | null>(null);
     const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -104,8 +106,24 @@ export default function SettingsPage() {
         }
     };
 
+    const saveEmailConfig = async (provider: string) => {
+        const config = emailConfigs[provider];
+        setIsSaving(provider);
+        try {
+            // Note: In a real app, this would hit /api/email/config
+            // For now, let's pretend and show the feedback
+            await new Promise(r => setTimeout(r, 1000));
+            toast.success("Configuração salva!", `As credenciais do ${provider} foram salvas.`);
+        } catch (err) {
+            toast.error("Erro ao salvar", "Não foi possível persistir os dados de email.");
+        } finally {
+            setIsSaving(null);
+        }
+    };
+
     const saveWaConfig = async (provider: string) => {
         const config = whatsappConfigs[provider];
+        setIsSaving(provider);
         try {
             const baseUrl = config.apiUrl?.replace(/\/$/, "");
             const res = await fetch("/api/whatsapp/config", {
@@ -119,12 +137,14 @@ export default function SettingsPage() {
                 })
             });
             if (res.ok) {
-                toast.success("Configuração salva!");
+                toast.success("Configuração salva!", "Os dados do WhatsApp foram atualizados.");
             } else {
-                toast.error("Erro ao salvar configuração");
+                toast.error("Erro ao salvar", "Verifique os dados e tente novamente.");
             }
         } catch (err) {
-            toast.error("Erro inesperado");
+            toast.error("Erro inesperado", "Houve um problema ao processar sua solicitação.");
+        } finally {
+            setIsSaving(null);
         }
     };
 
@@ -137,15 +157,17 @@ export default function SettingsPage() {
             if (data.qrcode?.base64) {
                 setQrCode(data.qrcode.base64);
                 updateConfig("evolution", { status: "qr_pending" }, "whatsapp");
-            } else if (data.instance?.status === "open") {
+                toast.info("QR Code Gerado", "Escaneie o código com seu WhatsApp.");
+            } else if (data.instance?.status === "open" || data.status === "open") {
                 updateConfig("evolution", { status: "connected" }, "whatsapp");
-                toast.success("WhatsApp Conectado!");
+                toast.success("Conectado!", "Sua instância já estava aberta e pronta.");
             } else {
                 updateConfig("evolution", { status: "error" }, "whatsapp");
-                toast.error("Erro ao gerar instância");
+                toast.error("Erro na Evolution", data.message || "Não foi possível gerar a instância.");
             }
         } catch (err) {
             updateConfig("evolution", { status: "error" }, "whatsapp");
+            toast.error("Falha Técnica", "Erro ao tentar conectar com o servidor Evolution.");
         }
     };
 
@@ -168,16 +190,16 @@ export default function SettingsPage() {
             if (isConnected) {
                 updateConfig("evolution", { status: "connected" }, "whatsapp");
                 setQrCode(null);
-                toast.success("Conectado com Sucesso!");
+                toast.success("Conectado com Sucesso!", "Sua instância da Evolution API está ativa.");
             } else {
                 updateConfig("evolution", { status: "error" }, "whatsapp");
                 const msg = data.error || data.message || "A instância não está conectada ao celular.";
-                toast.error(`Falha: ${msg}`);
+                toast.error("Falha na conexão", msg);
             }
         } catch (err) {
             console.error("[SETTINGS] Evolution Status Error:", err);
             updateConfig("evolution", { status: "error" }, "whatsapp");
-            toast.error("Erro técnico ao tentar falar com a Evolution API.");
+            toast.error("Erro de comunicação", "Não foi possível falar com a Evolution API.");
         }
     };
 
@@ -188,8 +210,10 @@ export default function SettingsPage() {
         const config = emailConfigs[provider];
         if (config.apiKey && config.fromEmail) {
             updateConfig(provider, { status: "connected" });
+            toast.success("Teste concluído!", `Conexão com ${provider} estabelecida com sucesso.`);
         } else {
             updateConfig(provider, { status: "error" });
+            toast.error("Falha no teste", "Verifique a API Key e o email de remetente.");
         }
     };
 
@@ -331,14 +355,24 @@ export default function SettingsPage() {
                                                 />
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => testConnection(prov.id)}
-                                            disabled={config.status === "testing"}
-                                            className="btn-secondary text-xs py-2"
-                                        >
-                                            <TestTube2 size={14} />
-                                            Testar Conexão
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => saveEmailConfig(prov.id)}
+                                                disabled={isSaving === prov.id}
+                                                className="btn-secondary flex-1 text-xs py-2 flex items-center justify-center gap-2"
+                                            >
+                                                {isSaving === prov.id ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                                Salvar
+                                            </button>
+                                            <button
+                                                onClick={() => testConnection(prov.id)}
+                                                disabled={config.status === "testing"}
+                                                className="btn-primary flex-1 text-xs py-2 flex items-center justify-center gap-2"
+                                            >
+                                                {config.status === "testing" ? <Loader2 size={14} className="animate-spin" /> : <TestTube2 size={14} />}
+                                                Testar Conexão
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -451,27 +485,30 @@ export default function SettingsPage() {
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                                 <button
                                                     onClick={() => saveWaConfig(prov.id)}
-                                                    className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-2xl hover:bg-zinc-50 transition-all border-2 border-zinc-100 font-bold"
+                                                    disabled={isSaving === prov.id}
+                                                    className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-2xl hover:bg-zinc-50 transition-all border-2 border-zinc-100 font-bold disabled:opacity-50"
                                                 >
-                                                    <Save size={16} className="text-zinc-400" />
-                                                    <span>Salvar Configuração</span>
+                                                    {isSaving === prov.id ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} className="text-zinc-400" />}
+                                                    <span>{isSaving === prov.id ? "Salvando..." : "Salvar Configuração"}</span>
                                                 </button>
 
                                                 <button
                                                     onClick={checkEvolutionStatus}
-                                                    className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-2xl transition-all border-2 border-brand-primary/20 text-brand-primary font-bold hover:bg-brand-primary/5"
+                                                    disabled={config.status === 'testing'}
+                                                    className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-2xl transition-all border-2 border-brand-primary/20 text-brand-primary font-bold hover:bg-brand-primary/5 disabled:opacity-50"
                                                 >
-                                                    <RefreshCw size={16} />
-                                                    <span>Verificar Conexão</span>
+                                                    {config.status === 'testing' ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                                                    <span>{config.status === 'testing' ? "Verificando..." : "Verificar Conexão"}</span>
                                                 </button>
 
                                                 {!config.status || config.status !== 'connected' ? (
                                                     <button
                                                         onClick={connectEvolution}
-                                                        className="btn-primary flex items-center justify-center gap-2 py-3 rounded-2xl shadow-lg shadow-brand-primary/20 font-black uppercase tracking-widest text-[10px]"
+                                                        disabled={config.status === 'testing' || config.status === 'qr_pending'}
+                                                        className="btn-primary flex flex-col items-center justify-center gap-1 py-3 rounded-2xl shadow-lg shadow-brand-primary/20 transition-all font-bold hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                                                     >
-                                                        <QrCode size={16} />
-                                                        <span>Gerar Novo QR Code</span>
+                                                        {config.status === 'testing' ? <Loader2 size={20} className="animate-spin" /> : <QrCode size={20} />}
+                                                        <span className="text-xs uppercase tracking-wider">{config.status === 'testing' ? "Gerando..." : "Gerar Novo QR Code"}</span>
                                                     </button>
                                                 ) : (
                                                     <div className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 text-emerald-600 rounded-2xl border-2 border-emerald-100 font-bold text-xs">

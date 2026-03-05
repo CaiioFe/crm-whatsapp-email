@@ -240,17 +240,35 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
             case 'send_whatsapp':
                 if (currentStep.config?.content) {
                     const { data: lead } = await supabase.from('leads').select('*').eq('id', enrollment.lead_id).single();
-                    const variables = {
-                        nome: lead?.name || lead?.contact_name || "Cliente",
+                    // 1. Build a rich variable map including custom_fields
+                    const variables: Record<string, any> = {
+                        name: lead?.name || "Cliente",
+                        nome: lead?.name?.split(' ')[0] || "Cliente", // First name as 'nome'
                         email: lead?.email || "",
+                        company: lead?.company || "",
                         empresa: lead?.company || "",
-                        estagio: lead?.current_stage_id || "",
+                        phone: lead?.phone || "",
+                        ...lead, // Spread all lead fields (id, source, etc)
+                        custom_fields: lead?.custom_fields || {}
                     };
 
-                    // Replace variables in content
+                    // 2. Helper to resolve deep paths like {{custom_fields.Faturamento}}
+                    const resolvePath = (path: string, obj: any) => {
+                        return path.split('.').reduce((prev, curr) => (prev && prev[curr] !== undefined) ? prev[curr] : null, obj);
+                    };
+
+                    // 3. Replace variables in content using regex to find {{path.to.var}}
                     let content = currentStep.config.content;
-                    for (const [k, v] of Object.entries(variables)) {
-                        content = content.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
+                    const matches = content.match(/\{\{([^}]+)\}\}/g);
+
+                    if (matches) {
+                        for (const match of matches) {
+                            const path = match.replace(/\{\{|\}\}/g, "").trim();
+                            const resolvedValue = resolvePath(path, variables);
+                            if (resolvedValue !== null) {
+                                content = content.replace(match, String(resolvedValue));
+                            }
+                        }
                     }
 
                     // Get WhatsApp config
