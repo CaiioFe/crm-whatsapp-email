@@ -3,9 +3,8 @@
 // Allows manual control over a specific lead's journey progress
 // ============================================================
 
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/rbac";
 
 export async function POST(req: Request) {
     try {
@@ -15,16 +14,8 @@ export async function POST(req: Request) {
             return new Response("ID e Status são obrigatórios", { status: 400 });
         }
 
-        const cookieStore = await cookies();
-        const supabase = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            {
-                cookies: {
-                    get(name: string) { return cookieStore.get(name)?.value },
-                },
-            }
-        );
+        const supabase = await createSupabaseServerClient();
+        await requirePermission('journeys.edit');
 
         // Authenticate user
         const { data: { user } } = await supabase.auth.getUser();
@@ -32,9 +23,9 @@ export async function POST(req: Request) {
 
         // Get profile and tenant to ensure ownership
         const { data: profile } = await supabase
-            .from('profiles')
+            .from('user_profiles')
             .select('tenant_id')
-            .eq('id', user.id)
+            .eq('user_id', user.id)
             .single();
 
         if (!profile) return new Response("Perfil não encontrado", { status: 404 });
@@ -54,7 +45,10 @@ export async function POST(req: Request) {
 
         if (error) throw error;
 
-        return NextResponse.json({ success: true });
+        return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+        });
     } catch (err) {
         console.error("[API_UPDATE_ENROLLMENT] Error:", err);
         return new Response("Erro interno", { status: 500 });
