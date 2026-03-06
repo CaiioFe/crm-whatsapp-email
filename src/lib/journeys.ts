@@ -152,7 +152,23 @@ export async function enrollLeadInJourney(supabase: SupabaseClient, tenantId: st
         throw new Error("Esta jornada não possui ações conectadas ao gatilho.");
     }
 
-    // 2. Enroll lead
+    // 2. Check for existing enrollment
+    const { data: existing } = await supabase
+        .from('journey_enrollments')
+        .select('id, status')
+        .eq('journey_id', journeyId)
+        .eq('lead_id', leadId)
+        .maybeSingle();
+
+    if (existing) {
+        if (['active', 'paused'].includes(existing.status)) {
+            throw new Error("Este lead já possui uma automação ativa nesta jornada.");
+        }
+        // If it was completed or dropped, we delete the old record to allow a fresh re-enrollment
+        await supabase.from('journey_enrollments').delete().eq('id', existing.id);
+    }
+
+    // 3. Enroll lead
     const { data: enrollment, error: enrollErr } = await supabase
         .from('journey_enrollments')
         .insert({

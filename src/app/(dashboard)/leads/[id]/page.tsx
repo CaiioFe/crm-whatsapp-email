@@ -248,7 +248,7 @@ export default function LeadProfilePage() {
                 if (res.ok) {
                     const data = await res.json();
                     setEnrollmentsList(data.filter((e: any) =>
-                        e.leads?.id === leadId && ['active', 'paused'].includes(e.status)
+                        e.leads?.id === leadId
                     ));
                 }
             } catch (err) {
@@ -312,6 +312,30 @@ export default function LeadProfilePage() {
             toastError("Erro", err.message);
         } finally {
             setIsEnrolling(false);
+        }
+    };
+    const terminateJourney = async (enrollmentId: string) => {
+        if (!confirm("Tem certeza que deseja terminar esta automação para este lead?")) return;
+
+        try {
+            const res = await fetch("/api/journeys/enrollments/update-status", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enrollmentId, status: 'dropped' })
+            });
+
+            if (!res.ok) throw new Error("Erro ao encerrar jornada");
+
+            toastSuccess("Sucesso", "Automação encerrada.");
+
+            // Update list from server
+            const resList = await fetch('/api/journeys/enrollments');
+            if (resList.ok) {
+                const data = await resList.json();
+                setEnrollmentsList(data.filter((e: any) => e.leads?.id === leadId));
+            }
+        } catch (err: any) {
+            toastError("Erro", err.message);
         }
     };
 
@@ -639,12 +663,29 @@ export default function LeadProfilePage() {
 
                             {enrollmentsList.length > 0 ? (
                                 enrollmentsList.map(enr => (
-                                    <div key={enr.id} className="space-y-3 mb-4 last:mb-0">
+                                    <div key={enr.id} className="space-y-3 mb-6 last:mb-0 pb-4 border-b border-zinc-100 last:border-0 dark:border-white/5">
                                         <div className="flex items-center justify-between">
                                             <p className="text-xs font-bold truncate pr-2" style={{ color: "var(--text-primary)" }}>{enr.journeys?.name}</p>
-                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary flex-shrink-0">
-                                                {enr.status === 'active' ? 'Ativo' : 'Pausado'}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${enr.status === 'active' ? 'bg-emerald-100 text-emerald-600' :
+                                                    enr.status === 'paused' ? 'bg-amber-100 text-amber-600' :
+                                                        enr.status === 'completed' ? 'bg-blue-100 text-blue-600' :
+                                                            'bg-zinc-100 text-zinc-500'
+                                                    }`}>
+                                                    {enr.status === 'active' ? 'Ativo' :
+                                                        enr.status === 'paused' ? 'Pausado' :
+                                                            enr.status === 'completed' ? 'Finalizado' : 'Interrompido'}
+                                                </span>
+                                                {['active', 'paused'].includes(enr.status) && (
+                                                    <button
+                                                        onClick={() => terminateJourney(enr.id)}
+                                                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                                                        title="Terminar Automação"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-white/5">
                                             <p className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Passo Atual</p>
