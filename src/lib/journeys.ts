@@ -438,7 +438,14 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                 const waitUnit = currentStep.config?.waitUnit || 'days';
 
                 // Save specific wait info for the background worker
-                const waitTime = waitUnit === 'days' ? waitValue * 86400000 : waitValue * 3600000;
+                let waitTime = 0;
+                switch (waitUnit) {
+                    case 'minutes': waitTime = waitValue * 60 * 1000; break;
+                    case 'hours': waitTime = waitValue * 60 * 60 * 1000; break;
+                    case 'days': waitTime = waitValue * 24 * 60 * 60 * 1000; break;
+                    case 'weeks': waitTime = waitValue * 7 * 24 * 60 * 60 * 1000; break;
+                    default: waitTime = waitValue * 24 * 60 * 60 * 1000; // Default to days
+                }
                 const nextRun = new Date(Date.now() + waitTime).toISOString();
 
                 await supabase.from('journey_enrollments').update({
