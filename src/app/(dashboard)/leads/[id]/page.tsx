@@ -16,7 +16,6 @@ import {
     Edit3,
     Check,
     X,
-    Send,
     Plus,
     ChevronDown,
     ChevronRight,
@@ -31,10 +30,13 @@ import {
     MapPin,
     ArrowRight,
     Zap,
+    Trash2,
+    Send,
 } from "lucide-react";
 import Link from "next/link";
 import { SendWhatsAppModal } from "@/components/ui/SendWhatsAppModal";
 import { EnrollJourneyModal } from "@/components/ui/EnrollJourneyModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/Toast";
 import type { InteractionType, Interaction } from "@/types/database";
 import { useFeatureFlag } from "@/components/layout/FeatureFlagProvider";
@@ -214,6 +216,8 @@ export default function LeadProfilePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
     const [showEnrollModal, setShowEnrollModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         const fetchLead = async () => {
@@ -331,6 +335,22 @@ export default function LeadProfilePage() {
         }
     };
 
+    const handleDeleteLead = async () => {
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/leads/delete?id=${leadId}`, { method: "DELETE" });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || "Erro ao excluir lead");
+            }
+            toastSuccess("Excluído", "O lead foi removido com sucesso.");
+            router.push("/leads");
+        } catch (err: any) {
+            toastError("Erro", err.message);
+            setIsDeleting(false);
+        }
+    };
+
     const handleUpdateCustomField = async (key: string, value: any) => {
         try {
             const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
@@ -406,9 +426,17 @@ export default function LeadProfilePage() {
                             className="text-xs font-bold px-2.5 py-0.5 rounded-full"
                             style={{ background: score.bg, color: score.color }}
                         >
-                            Score: {lead.lead_score} — {score.text}
                         </span>
                     </div>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowDeleteModal(true)}
+                        className="p-2.5 rounded-xl hover:bg-red-50 hover:text-red-500 transition-all text-zinc-400 border border-transparent hover:border-red-100"
+                        title="Excluir Lead"
+                    >
+                        <Trash2 size={18} />
+                    </button>
                 </div>
             </div>
 
@@ -843,6 +871,14 @@ export default function LeadProfilePage() {
                         onEnroll={enrollInJourney}
                         leadName={lead.name}
                         enrolledJourneyIds={enrollmentsList.map(e => e.journey_id)}
+                    />
+                    <ConfirmModal
+                        open={showDeleteModal}
+                        onClose={() => setShowDeleteModal(false)}
+                        onConfirm={handleDeleteLead}
+                        title="Excluir Lead"
+                        description={`Tem certeza que deseja excluir ${lead.name}? Esta ação não pode ser desfeita.`}
+                        confirmText={isDeleting ? "Excluindo..." : "Excluir Permanentemente"}
                     />
                 </>
             )}
