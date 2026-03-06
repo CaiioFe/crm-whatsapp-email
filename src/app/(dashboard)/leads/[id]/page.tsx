@@ -301,7 +301,7 @@ export default function LeadProfilePage() {
                 if (resEnd.ok) {
                     const data = await resEnd.json();
                     setEnrollmentsList(data.filter((e: any) =>
-                        e.leads?.id === leadId && ['active', 'paused'].includes(e.status)
+                        e.leads?.id === leadId
                     ));
                 }
             } catch (err) {

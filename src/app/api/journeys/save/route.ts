@@ -21,14 +21,24 @@ export async function POST(request: NextRequest) {
         if (!profile) return new Response(JSON.stringify({ error: "Profile not found" }), { status: 400 });
 
         const body = await request.json();
-        const { id, name, description, trigger_type, canvas_data, status } = body;
+        const { id, name, description, trigger_type, canvas_data, status, exit_criteria } = body;
+
+        // Extract trigger_type from canvas if not explicitly provided
+        let effectiveTriggerType = trigger_type;
+        if (!effectiveTriggerType && canvas_data?.nodes) {
+            const triggerNode = canvas_data.nodes.find((n: any) => n.data?.nodeType === 'trigger');
+            if (triggerNode) {
+                effectiveTriggerType = triggerNode.data?.triggerType || 'manual';
+            }
+        }
 
         const journeyData = {
             tenant_id: profile.tenant_id,
             name: name || "Nova Jornada",
             description: description || "",
-            trigger_type: trigger_type || "manual",
+            trigger_type: effectiveTriggerType || "manual",
             canvas_data: canvas_data || { nodes: [], edges: [] },
+            exit_criteria: exit_criteria || [],
             status: status || 'draft',
             updated_at: new Date().toISOString(),
         };
