@@ -430,6 +430,15 @@ export default function LeadProfilePage() {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    {isJourneyEnabled && (
+                        <button
+                            onClick={() => setShowEnrollModal(true)}
+                            className="btn-primary flex items-center gap-2 !h-10 !px-4 text-xs"
+                        >
+                            <Zap size={16} />
+                            <span className="hidden sm:inline">Atribuir Jornada</span>
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowDeleteModal(true)}
                         className="p-2.5 rounded-xl hover:bg-red-50 hover:text-red-500 transition-all text-zinc-400 border border-transparent hover:border-red-100"
