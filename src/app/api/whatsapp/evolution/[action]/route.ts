@@ -64,8 +64,9 @@ export async function POST(
                 },
                 body: JSON.stringify({
                     number: number,
-                    options: { delay: 1200, presence: "composing" },
-                    textMessage: { text: text }
+                    text: text,
+                    delay: 1200,
+                    linkPreview: false
                 })
             });
 

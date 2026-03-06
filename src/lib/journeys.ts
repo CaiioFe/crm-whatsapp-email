@@ -370,8 +370,9 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                                 },
                                 body: JSON.stringify({
                                     number: leadPhone.startsWith("55") ? leadPhone : `55${leadPhone}`,
-                                    options: { delay: 1200, presence: "composing" },
-                                    textMessage: { text: content }
+                                    text: content,
+                                    delay: 1200,
+                                    linkPreview: false // Default to false to avoid issues
                                 })
                             });
 
@@ -381,7 +382,10 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                                 console.log(`[JOURNEY] WhatsApp sent to ${leadPhone}: ${content.substring(0, 30)}...`);
                                 executionResult = { success: true, channel: 'whatsapp', result: resData };
                             } else {
-                                throw new Error(resData.message || "Evolution API Error");
+                                // Save resData in the log result even on failure
+                                const error = new Error(resData.message || "Evolution API Error") as any;
+                                error.result = resData;
+                                throw error;
                             }
                         } catch (err) {
                             console.error("[JOURNEY] WhatsApp Error:", err);
@@ -498,7 +502,9 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
         console.error(`Error executing journey step ${currentStep.id}:`, err);
         await supabase.from('journey_step_logs').update({
             status: 'failed',
-            error_message: err instanceof Error ? err.message : String(err)
+            error_message: err instanceof Error ? err.message : String(err),
+            result: (err as any).result || {}, // Attempt to grab result from error context
+            completed_at: new Date().toISOString()
         }).eq('id', logEntry?.id);
     }
 }
