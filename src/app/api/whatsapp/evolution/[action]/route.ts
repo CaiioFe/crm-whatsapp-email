@@ -103,16 +103,25 @@ export async function GET(
 
         const baseUrl = config.api_url.replace(/\/$/, "");
 
-        if (action === "connect") {
-            console.log(`[EVOLUTION PROXY] Checking connection for instance: ${config.instance_name}`);
-            const response = await fetch(`${baseUrl}/instance/connect/${config.instance_name}`, {
+        if (action === "connect" || action === "status") {
+            const endpoint = action === "status" ? "connectionState" : "connect";
+            console.log(`[EVOLUTION PROXY] Checking ${endpoint} for instance: ${config.instance_name}`);
+
+            const keySize = config.api_key_encrypted?.length || 0;
+            console.log(`[EVOLUTION PROXY] API Key size: ${keySize}`);
+
+            const response = await fetch(`${baseUrl}/instance/${endpoint}/${config.instance_name}`, {
                 headers: { "apikey": config.api_key_encrypted }
             });
 
             const data = await response.json();
-            console.log(`[EVOLUTION PROXY] Response:`, data);
+            console.log(`[EVOLUTION PROXY] ${endpoint} Response Status:`, response.status);
+            console.log(`[EVOLUTION PROXY] ${endpoint} Data:`, data);
 
-            return new Response(JSON.stringify(data), { status: response.status });
+            return new Response(JSON.stringify(data), {
+                status: response.status,
+                headers: { "Content-Type": "application/json" }
+            });
         }
 
         return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400 });

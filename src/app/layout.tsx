@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   description: "CRM com disparo de WhatsApp e Email, jornadas de automação e pipeline de leads",
 };
 
+import { Suspense } from "react";
+import { LoadingBar } from "@/components/layout/LoadingBar";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -22,6 +25,9 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className={`${inter.variable} antialiased`}>
         <Providers>
+          <Suspense fallback={null}>
+            <LoadingBar />
+          </Suspense>
           {children}
         </Providers>
       </body>

@@ -3,13 +3,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"; // Note: In
 
 import { createClient } from "@supabase/supabase-js";
 
-// Webhooks come from external Evolution API, so we need a service role client to bypass RLS and identify the tenant based on the instance name or meta data.
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(req: NextRequest) {
+    // Webhooks come from external Evolution API, so we need a service role client to bypass RLS and identify the tenant based on the instance name or meta data.
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
+
     try {
         const body = await req.json();
         const { event, instance, data } = body;

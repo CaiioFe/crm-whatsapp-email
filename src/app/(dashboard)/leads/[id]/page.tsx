@@ -25,10 +25,19 @@ import {
     Clock,
     Star,
     GitBranch,
+    Instagram,
+    Globe,
+    BarChart3,
+    MapPin,
+    ArrowRight,
+    Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { SendWhatsAppModal } from "@/components/ui/SendWhatsAppModal";
+import { EnrollJourneyModal } from "@/components/ui/EnrollJourneyModal";
+import { useToast } from "@/components/ui/Toast";
 import type { InteractionType, Interaction } from "@/types/database";
+import { useFeatureFlag } from "@/components/layout/FeatureFlagProvider";
 
 // ============================================================
 // Interaction Icon & Color Map
@@ -191,6 +200,7 @@ function TimelineItem({ interaction }: { interaction: Interaction }) {
 // MAIN PAGE
 // ============================================================
 export default function LeadProfilePage() {
+    const isJourneyEnabled = useFeatureFlag('journey_engine');
     const params = useParams();
     const router = useRouter();
     const leadId = params.id as string;
@@ -199,8 +209,11 @@ export default function LeadProfilePage() {
     const [stages, setStages] = useState<any[]>([]);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [enrollmentsList, setEnrollmentsList] = useState<any[]>([]);
+    const [availableJourneys, setAvailableJourneys] = useState<any[]>([]);
+    const [isEnrolling, setIsEnrolling] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+    const [showEnrollModal, setShowEnrollModal] = useState(false);
 
     useEffect(() => {
         const fetchLead = async () => {
@@ -226,12 +239,28 @@ export default function LeadProfilePage() {
             if (inters) setInteractions(inters as Interaction[]);
 
             // fetch journey enrollments
-            const { data: enrs } = await supabase
-                .from('journey_enrollments')
-                .select('*, journeys(name), journey_steps(name)')
-                .eq('lead_id', leadId)
-                .in('status', ['active', 'paused']);
-            if (enrs) setEnrollmentsList(enrs);
+            try {
+                const res = await fetch('/api/journeys/enrollments');
+                if (res.ok) {
+                    const data = await res.json();
+                    setEnrollmentsList(data.filter((e: any) =>
+                        e.leads?.id === leadId && ['active', 'paused'].includes(e.status)
+                    ));
+                }
+            } catch (err) {
+                console.error("Failed to fetch enrollments", err);
+            }
+
+            // fetch available active journeys
+            try {
+                const res = await fetch('/api/journeys/list');
+                if (res.ok) {
+                    const data = await res.json();
+                    setAvailableJourneys(data.filter((j: any) => j.status === 'active'));
+                }
+            } catch (err) {
+                console.error("Failed to fetch available journeys", err);
+            }
 
             setIsLoading(false);
         };
@@ -247,6 +276,81 @@ export default function LeadProfilePage() {
     const [showAddNote, setShowAddNote] = useState(false);
     const [showStageSelect, setShowStageSelect] = useState(false);
     const [mobileSection, setMobileSection] = useState<Set<string>>(new Set(["info", "timeline"]));
+    const { success: toastSuccess, error: toastError } = useToast();
+
+    const enrollInJourney = async (journeyId: string) => {
+        if (!journeyId) return;
+        setIsEnrolling(true);
+        try {
+            const res = await fetch("/api/journeys/enroll", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ leadId, journeyId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Erro ao inscrever");
+            toastSuccess("Sucesso", "Lead inscrito na jornada com sucesso!");
+
+            // Fetch updated journey enrollments
+            try {
+                const resEnd = await fetch('/api/journeys/enrollments');
+                if (resEnd.ok) {
+                    const data = await resEnd.json();
+                    setEnrollmentsList(data.filter((e: any) =>
+                        e.leads?.id === leadId && ['active', 'paused'].includes(e.status)
+                    ));
+                }
+            } catch (err) {
+                console.error(err);
+            }
+
+        } catch (err: any) {
+            toastError("Erro", err.message);
+        } finally {
+            setIsEnrolling(false);
+        }
+    };
+
+    const handleUpdateLead = async (updates: Partial<Lead>) => {
+        try {
+            const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+            const supabase = createSupabaseBrowserClient();
+
+            const { error } = await supabase
+                .from('leads')
+                .update(updates)
+                .eq('id', leadId);
+
+            if (error) throw error;
+
+            setLead(prev => prev ? { ...prev, ...updates } : null);
+            toastSuccess("Sucesso", "Informações atualizadas");
+        } catch (err: any) {
+            console.error("Update error:", err);
+            toastError("Erro", "Não foi possível atualizar o lead");
+        }
+    };
+
+    const handleUpdateCustomField = async (key: string, value: any) => {
+        try {
+            const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+            const supabase = createSupabaseBrowserClient();
+
+            const newCustomFields = { ...(lead?.custom_fields as any || {}), [key]: value };
+
+            const { error } = await supabase
+                .from('leads')
+                .update({ custom_fields: newCustomFields })
+                .eq('id', leadId);
+
+            if (error) throw error;
+
+            setLead(prev => prev ? { ...prev, custom_fields: newCustomFields } : null);
+            toastSuccess("Sucesso", `${key} atualizado`);
+        } catch (err: any) {
+            toastError("Erro", "Não foi possível atualizar o campo");
+        }
+    };
 
     if (isLoading) {
         return <div className="text-center py-16">Carregando...</div>;
@@ -330,39 +434,132 @@ export default function LeadProfilePage() {
                         <div className={`space-y-3 ${mobileSection.has("info") ? "" : "hidden md:block"}`}>
                             <div className="flex items-center gap-2">
                                 <Mail size={14} style={{ color: "var(--text-muted)" }} />
-                                <InlineEdit value={lead.email || ""} onSave={() => { }} label="Email" />
+                                <InlineEdit value={lead.email || ""} onSave={(val) => handleUpdateLead({ email: val })} label="Email" />
                             </div>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Phone size={14} style={{ color: "var(--text-muted)" }} />
-                                    <InlineEdit value={lead.phone || ""} onSave={() => { }} label="Telefone" />
+                                    <InlineEdit value={lead.phone || ""} onSave={(val) => handleUpdateLead({ phone: val })} label="Telefone" />
                                 </div>
                                 {lead.phone && (
-                                    <button
-                                        onClick={() => setShowWhatsAppModal(true)}
-                                        className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 hover:scale-110 transition-transform"
-                                        title="Enviar WhatsApp"
-                                    >
-                                        <MessageCircle size={14} />
-                                    </button>
+                                    <div className="flex gap-1.5">
+                                        <button
+                                            onClick={() => setShowWhatsAppModal(true)}
+                                            className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 hover:scale-110 transition-transform"
+                                            title="WhatsApp Manual"
+                                        >
+                                            <MessageCircle size={14} />
+                                        </button>
+                                        {isJourneyEnabled && (
+                                            <button
+                                                onClick={() => setShowEnrollModal(true)}
+                                                className="p-1.5 rounded-lg bg-brand-primary/10 text-brand-primary hover:scale-110 transition-transform"
+                                                title="Acionar Automação/Campanha"
+                                            >
+                                                <Zap size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                             <div className="flex items-center gap-2">
                                 <Building2 size={14} style={{ color: "var(--text-muted)" }} />
-                                <InlineEdit value={lead.company || ""} onSave={() => { }} label="Empresa" />
+                                <InlineEdit value={lead.company || ""} onSave={(val) => handleUpdateLead({ company: val })} label="Empresa" />
                             </div>
                             <div className="flex items-center gap-2">
                                 <Briefcase size={14} style={{ color: "var(--text-muted)" }} />
-                                <InlineEdit value={lead.position_title || ""} onSave={() => { }} label="Cargo" />
+                                <InlineEdit value={lead.position_title || ""} onSave={(val) => handleUpdateLead({ position_title: val })} label="Cargo" />
                             </div>
-                            <div className="flex items-center gap-2">
+
+                            {/* Instagram & Revenue - PROMOTED FIELDS */}
+                            <div className="flex items-center gap-4 py-3 px-3 mt-4 rounded-xl bg-gradient-to-r from-brand-primary/5 to-transparent border border-brand-primary/10">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <div className="p-2 rounded-lg bg-pink-500/10 text-pink-500">
+                                        <Instagram size={16} />
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-[10px] font-black uppercase text-zinc-400">Instagram</span>
+                                        <InlineEdit
+                                            value={(lead.custom_fields as any)?.instagram || ""}
+                                            onSave={(val) => handleUpdateCustomField('instagram', val)}
+                                            label="Instagram"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="w-px h-8 bg-zinc-100/50" />
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
+                                        <TrendingUp size={16} />
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-[10px] font-black uppercase text-zinc-400">Faturamento</span>
+                                        <InlineEdit
+                                            value={(lead.custom_fields as any)?.faturamento || ""}
+                                            onSave={(val) => handleUpdateCustomField('faturamento', val)}
+                                            label="Faturamento"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-2">
                                 <Clock size={14} style={{ color: "var(--text-muted)" }} />
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase w-20">Criado</span>
                                 <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                                    Criado em {formatDate(lead.created_at)}
+                                    {formatDate(lead.created_at)}
                                 </span>
                             </div>
                         </div>
                     </div>
+
+                    {/* Source & Custom Fields */}
+                    {(lead.source || Object.keys(lead.custom_fields || {}).length > 0) && (
+                        <div className="card p-5">
+                            <h3 className="font-semibold text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
+                                DADOS ADICIONAIS
+                            </h3>
+                            <div className="space-y-4">
+                                {lead.source && (
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 mt-0.5">
+                                            <Globe size={14} className="text-zinc-400" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Origem</p>
+                                            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                                                {lead.source} {lead.source_detail && `— ${lead.source_detail}`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {Object.entries(lead.custom_fields || {}).map(([key, value]) => {
+                                    if (!value) return null;
+
+                                    let Icon = StickyNote;
+                                    const lowerKey = key.toLowerCase();
+                                    if (lowerKey.includes('instagram')) Icon = Instagram;
+                                    if (lowerKey.includes('faturamento')) Icon = BarChart3;
+                                    if (lowerKey.includes('cidade') || lowerKey.includes('país') || lowerKey.includes('região')) Icon = MapPin;
+                                    if (lowerKey.includes('site') || lowerKey.includes('url')) Icon = Globe;
+
+                                    return (
+                                        <div key={key} className="flex items-start gap-3">
+                                            <div className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 mt-0.5">
+                                                <Icon size={14} className="text-zinc-400" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{key}</p>
+                                                <p className="text-sm font-medium break-words" style={{ color: "var(--text-primary)" }}>
+                                                    {String(value)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Tags */}
                     <div className="card p-5">
@@ -393,57 +590,54 @@ export default function LeadProfilePage() {
                     </div>
 
                     {/* Journey Status */}
-                    <div className="card p-5 border-l-4 border-l-brand-primary">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-bold text-xs uppercase tracking-wider" style={{ color: "var(--brand-primary)" }}>
-                                AUTOMAÇÃO ATIVA
-                            </h3>
-                            <GitBranch size={14} style={{ color: "var(--brand-primary)" }} />
-                        </div>
+                    {isJourneyEnabled && (
+                        <div className="card p-5 border-l-4 border-l-brand-primary">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-bold text-xs uppercase tracking-wider" style={{ color: "var(--brand-primary)" }}>
+                                    AUTOMAÇÃO ATIVA
+                                </h3>
+                                <GitBranch size={14} style={{ color: "var(--brand-primary)" }} />
+                            </div>
 
-                        {enrollmentsList.length > 0 ? (
-                            enrollmentsList.map(enr => (
-                                <div key={enr.id} className="space-y-3">
-                                    <div>
-                                        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{enr.journeys?.name}</p>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary">
-                                                {enr.status === 'active' ? 'Em Progresso' : 'Pausado'}
+                            {enrollmentsList.length > 0 ? (
+                                enrollmentsList.map(enr => (
+                                    <div key={enr.id} className="space-y-3 mb-4 last:mb-0">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-bold truncate pr-2" style={{ color: "var(--text-primary)" }}>{enr.journeys?.name}</p>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary flex-shrink-0">
+                                                {enr.status === 'active' ? 'Ativo' : 'Pausado'}
                                             </span>
                                         </div>
-                                    </div>
-
-                                    <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-100 dark:bg-zinc-900/50 dark:border-zinc-800">
-                                        <div className="flex items-start gap-2">
-                                            <div className="mt-1 w-2 h-2 rounded-full bg-brand-primary animate-pulse" />
-                                            <div>
-                                                <p className="text-[10px] font-bold text-zinc-400 uppercase">Passo Atual</p>
-                                                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                                                    {enr.journey_steps?.name || 'Iniciando...'}
-                                                </p>
-                                            </div>
+                                        <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-white/5">
+                                            <p className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Passo Atual</p>
+                                            <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                                                {enr.journey_steps?.name || 'Iniciando...'}
+                                            </p>
                                         </div>
-
-                                        {(enr.metadata as any)?.waiting_until && (
-                                            <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-1.5 text-zinc-500">
-                                                <Clock size={12} />
-                                                <span className="text-[10px] font-medium">
-                                                    Próxima ação: {new Date((enr.metadata as any).waiting_until).toLocaleString('pt-BR')}
-                                                </span>
-                                            </div>
-                                        )}
                                     </div>
+                                ))
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-8 px-4 border-2 border-dashed rounded-2xl border-zinc-100 dark:border-white/5 bg-zinc-50/30 dark:bg-white/5">
+                                    <GitBranch size={24} className="text-zinc-200 mb-2" />
+                                    <p className="text-xs text-zinc-400 font-medium text-center">Nenhuma automação em curso para este lead.</p>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="text-center py-4 px-2 border border-dashed rounded-xl border-zinc-200">
-                                <p className="text-xs text-zinc-400 italic">Nenhuma jornada ativa</p>
-                                <Link href="/journeys" className="text-[10px] font-bold text-brand-primary hover:underline mt-2 block">
-                                    Inscrever em uma jornada
-                                </Link>
-                            </div>
-                        )}
-                    </div>
+                            )}
+
+                            {availableJourneys.length > 0 && (
+                                <div className="mt-4 pt-4 border-t border-zinc-100/50">
+                                    <button
+                                        onClick={() => setShowEnrollModal(true)}
+                                        disabled={isEnrolling}
+                                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-brand-primary text-white text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-brand-primary/20 disabled:opacity-50"
+                                    >
+                                        <Plus size={14} />
+                                        Atribuir Jornada
+                                    </button>
+                                    <p className="text-[10px] text-zinc-400 text-center mt-3 font-medium uppercase tracking-tight">O lead iniciará imediatamente o primeiro passo.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Score Breakdown */}
                     <div className="card p-5">
@@ -616,6 +810,16 @@ export default function LeadProfilePage() {
                     <StickyNote size={18} style={{ color: "#f59e0b" }} />
                     Nota
                 </button>
+                {isJourneyEnabled && (
+                    <button
+                        onClick={() => setShowEnrollModal(true)}
+                        className="flex flex-col items-center gap-1 text-[10px]"
+                        style={{ color: "var(--text-secondary)" }}
+                    >
+                        <Zap size={18} style={{ color: "var(--brand-primary)" }} />
+                        Jornada
+                    </button>
+                )}
                 <button
                     className="flex flex-col items-center gap-1 text-[10px]"
                     style={{ color: "var(--text-secondary)" }}
@@ -625,14 +829,23 @@ export default function LeadProfilePage() {
                 </button>
             </div>
 
-            {/* WhatsApp Modal */}
+            {/* Modals */}
             {lead && (
-                <SendWhatsAppModal
-                    open={showWhatsAppModal}
-                    onClose={() => setShowWhatsAppModal(false)}
-                    lead={{ id: lead.id, name: lead.name, phone: lead.phone }}
-                />
+                <>
+                    <SendWhatsAppModal
+                        open={showWhatsAppModal}
+                        onClose={() => setShowWhatsAppModal(false)}
+                        lead={{ id: lead.id, name: lead.name, phone: lead.phone }}
+                    />
+                    <EnrollJourneyModal
+                        open={showEnrollModal}
+                        onClose={() => setShowEnrollModal(false)}
+                        onEnroll={enrollInJourney}
+                        leadName={lead.name}
+                        enrolledJourneyIds={enrollmentsList.map(e => e.journey_id)}
+                    />
+                </>
             )}
-        </div>
+        </div >
     );
 }

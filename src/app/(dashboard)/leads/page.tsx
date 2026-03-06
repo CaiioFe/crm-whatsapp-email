@@ -10,10 +10,12 @@ import {
     type PipelineFilterState,
 } from "@/components/pipeline/PipelineFilters";
 import { CreateLeadModal } from "@/components/ui/CreateLeadModal";
+import { EnrollJourneyModal } from "@/components/ui/EnrollJourneyModal";
 import { useToast } from "@/components/ui/Toast";
 import { exportCSV } from "@/lib/export-csv";
 import type { Lead, Tag, PipelineStage } from "@/types/database";
 import { createSupabaseBrowserClient as createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 type LeadWithTags = Lead & { tags: Tag[] };
 
@@ -31,7 +33,9 @@ export default function LeadsPage() {
     });
     const [isMobile, setIsMobile] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [enrollModalLead, setEnrollModalLead] = useState<{ id: string; name: string } | null>(null);
     const toast = useToast();
+    const router = useRouter();
 
     // Detect mobile
     useEffect(() => {
@@ -41,38 +45,44 @@ export default function LeadsPage() {
         return () => window.removeEventListener("resize", check);
     }, []);
 
+    // Expose modal trigger to window for LeadCards
+    useEffect(() => {
+        (window as any).openEnrollModal = (id: string, name: string) => {
+            setEnrollModalLead({ id, name });
+        };
+        return () => { delete (window as any).openEnrollModal; };
+    }, []);
+
     // Fetch Data
     useEffect(() => {
         const fetchData = async () => {
             const supabase = createClient();
             setIsLoading(true);
             try {
-                // 1. Tags
-                const { data: tagsData } = await supabase.from('tags').select('*');
-                if (tagsData) setTags(tagsData);
+                // Parallelize fetches for better speed
+                const [tagsRes, pipelineRes, leadsRes] = await Promise.all([
+                    supabase.from('tags').select('*'),
+                    supabase.from('pipelines').select('id').order('created_at').limit(1).single(),
+                    supabase.from('leads').select('*, lead_tags(tags(*))')
+                ]);
 
-                // 2. Fetch default pipeline and stages
-                const { data: pipeline } = await supabase.from('pipelines').select('id').order('created_at').limit(1).single();
+                if (tagsRes.data) setTags(tagsRes.data);
 
-                let validStages: PipelineStage[] = [];
-                if (pipeline) {
-                    const { data: stagesData } = await supabase.from('pipeline_stages').select('*').eq('pipeline_id', pipeline.id).order('position');
-                    if (stagesData) {
-                        setStages(stagesData);
-                        validStages = stagesData;
-                    }
+                if (pipelineRes.data) {
+                    const { data: stagesData } = await supabase
+                        .from('pipeline_stages')
+                        .select('*')
+                        .eq('pipeline_id', pipelineRes.data.id)
+                        .order('position');
+                    if (stagesData) setStages(stagesData);
                 }
 
-                // 3. Leads with tags
-                const { data: leadsData, error: leadsError } = await supabase.from('leads').select('*, lead_tags(tags(*))');
-                if (leadsError) {
-                    console.error("Error fetching leads:", leadsError);
-                } else if (leadsData) {
-                    // Mapear tags corretamente para LeadWithTags
-                    // A query lead_tags(tags(*)) retorna array de arrays
-                    const mappedLeads = (leadsData as any[]).map(l => ({
+                if (leadsRes.error) {
+                    console.error("Error fetching leads:", leadsRes.error);
+                } else if (leadsRes.data) {
+                    const mappedLeads = (leadsRes.data as any[]).map(l => ({
                         ...l,
-                        tags: l.lead_tags ? l.lead_tags.map((lt: any) => lt.tags) : []
+                        tags: l.lead_tags ? l.lead_tags.map((lt: any) => lt.tags).filter(Boolean) : []
                     })) as LeadWithTags[];
                     setLeads(mappedLeads);
                 }
@@ -177,8 +187,8 @@ export default function LeadsPage() {
     );
 
     const handleLeadClick = useCallback((leadId: string) => {
-        window.location.href = `/leads/${leadId}`;
-    }, []);
+        router.push(`/leads/${leadId}`);
+    }, [router]);
 
     const handleFiltersChange = useCallback((newFilters: PipelineFilterState) => {
         setFilters(newFilters);
@@ -199,10 +209,29 @@ export default function LeadsPage() {
     };
 
     const handleCreateLead = async (data: Record<string, string>) => {
-        toast.success("Lead sendo criado...", "Por favor, aguarde.");
-        setTimeout(() => { window.location.reload() }, 1000); // Temporary reload to fetch new lead
-    };
+        try {
+            const res = await fetch("/api/leads/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
 
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Erro ao criar lead");
+            }
+
+            const newLead = await res.json();
+
+            // Append to state so it shows up immediately
+            setLeads(prev => [{ ...newLead, tags: [] }, ...prev]);
+
+            toast.success("Sucesso", "Lead criado com sucesso!");
+            setShowCreateModal(false);
+        } catch (err: any) {
+            toast.error("Erro", err.message);
+        }
+    };
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[50vh] text-muted-foreground gap-4">
@@ -265,7 +294,33 @@ export default function LeadsPage() {
                 open={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
                 onSave={handleCreateLead}
+                stages={stages}
+                availableTags={tags}
             />
+
+            {/* Enroll Journey Modal */}
+            {enrollModalLead && (
+                <EnrollJourneyModal
+                    open={!!enrollModalLead}
+                    onClose={() => setEnrollModalLead(null)}
+                    leadName={enrollModalLead.name}
+                    enrolledJourneyIds={[]} // We don't have current enrollments here easily, but the API handles duplicates
+                    onEnroll={async (journeyId) => {
+                        try {
+                            const res = await fetch("/api/journeys/enroll", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ leadId: enrollModalLead.id, journeyId })
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.error || "Erro ao inscrever");
+                            toast.success("Sucesso", "Lead inscrito na jornada!");
+                        } catch (err: any) {
+                            toast.error("Erro", err.message);
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 }

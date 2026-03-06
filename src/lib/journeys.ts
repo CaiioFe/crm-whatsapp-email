@@ -37,69 +37,145 @@ export async function normalizeJourney(supabase: SupabaseClient, journeyId: stri
 
     // 1. Clean up existing relational data
     // We do a clean slate approach for the relational structure to avoid drift
-    await supabase.from('journey_edges').delete().eq('journey_id', journeyId);
-    await supabase.from('journey_steps').delete().eq('journey_id', journeyId);
+    console.log(`[NORMALIZE] Cleaning up journey ${journeyId} for tenant ${tenantId}`);
 
-    // 2. Identify the Trigger
+    // Delete edges first to avoid FK constraints between steps and edges
+    const { error: delEdgesErr } = await supabase.from('journey_edges').delete().eq('journey_id', journeyId);
+    if (delEdgesErr) {
+        console.error("[NORMALIZE] Error deleting edges:", delEdgesErr);
+        throw new Error(`Erro ao limpar conexões: ${delEdgesErr.message}`);
+    }
+
+    const { error: delStepsErr } = await supabase.from('journey_steps').delete().eq('journey_id', journeyId).eq('tenant_id', tenantId);
+    if (delStepsErr) {
+        console.error("[NORMALIZE] Error deleting steps:", delStepsErr);
+        // If this fails, it's likely due to active enrollments referencing steps
+        throw new Error("Não foi possível atualizar a estrutura pois existem leads ativos nesta jornada. Pause a jornada primeiro.");
+    }
+
+    // 2. Identify and Update the Trigger
     const triggerNode = nodes.find(n => n.data.nodeType === 'trigger');
     if (triggerNode) {
-        // Update the main journey record with trigger info
-        await supabase
+        const triggerType = triggerNode.data.triggerType || 'manual';
+        console.log(`[NORMALIZE] Updating trigger for journey ${journeyId} to ${triggerType}`);
+
+        const { error: updErr } = await supabase
             .from('journeys')
             .update({
-                trigger_type: triggerNode.data.triggerType || 'manual',
-                trigger_config: triggerNode.data
+                trigger_type: triggerType,
+                trigger_config: triggerNode.data,
+                updated_at: new Date().toISOString()
             })
-            .eq('id', journeyId);
+            .eq('id', journeyId)
+            .eq('tenant_id', tenantId);
+
+        if (updErr) throw updErr;
     }
 
-    // 3. Insert Steps and create a mapping (canvasId -> dbId)
+    // 3. Batch Insert Steps and create mapping
     const nodeMapping: Record<string, string> = {};
+    console.log(`[NORMALIZE] Preparing ${nodes.length} steps...`);
+    const stepsToInsert = nodes.map(node => ({
+        journey_id: journeyId,
+        tenant_id: tenantId,
+        step_type: node.data.nodeType as any,
+        name: node.data.label,
+        config: node.data,
+        position_x: node.position.x,
+        position_y: node.position.y
+    }));
 
-    for (const node of nodes) {
-        // Skip the trigger node for steps table? 
-        // Actually, the engine might need the trigger as the starting point, 
-        // but usually, the first REAL action is the start.
-        // Let's keep it for consistency.
+    const { data: insertedSteps, error: stepsErr } = await supabase
+        .from('journey_steps')
+        .insert(stepsToInsert)
+        .select('id, position_x, position_y');
 
-        const { data: step, error } = await supabase
-            .from('journey_steps')
-            .insert({
-                journey_id: journeyId,
-                tenant_id: tenantId,
-                step_type: node.data.nodeType as any,
-                name: node.data.label,
-                config: node.data,
-                position_x: node.position.x,
-                position_y: node.position.y
-            })
-            .select('id')
-            .single();
-
-        if (error) throw error;
-        nodeMapping[node.id] = step.id;
+    if (stepsErr) {
+        console.error(`[NORMALIZE] Error inserting steps:`, stepsErr);
+        throw stepsErr;
     }
 
-    // 4. Insert Edges using the mapping
-    for (const edge of edges) {
-        const sourceStepId = nodeMapping[edge.source];
-        const targetStepId = nodeMapping[edge.target];
+    // Map canvas IDs back to DB IDs using positions (since IDs change)
+    // A better way would be sending the canvas ID to the DB if the schema allows, 
+    // but positions are unique enough for this mapping during a single normalize call.
+    // Actually, let's use the index from the map to ensure order if possible, 
+    // or better yet, we should have a canvasid field in the DB.
+    // For now, let's map by finding the closest match or assuming exact order 
+    // (Supabase insert with select usually preserves order).
 
-        if (sourceStepId && targetStepId) {
-            const { error: edgeErr } = await supabase
-                .from('journey_edges')
-                .insert({
-                    journey_id: journeyId,
-                    source_step_id: sourceStepId,
-                    target_step_id: targetStepId,
-                    condition_label: edge.label || null
-                });
+    nodes.forEach((node, index) => {
+        // Safe assumption: insertedSteps follows the order of stepsToInsert
+        nodeMapping[node.id] = insertedSteps[index].id;
+    });
 
-            if (edgeErr) throw edgeErr;
-        }
+    // 4. Batch Insert Edges
+    console.log(`[NORMALIZE] Preparing ${edges.length} edges...`);
+    const edgesToInsert = edges.map(edge => ({
+        journey_id: journeyId,
+        source_step_id: nodeMapping[edge.source],
+        target_step_id: nodeMapping[edge.target],
+        condition_label: edge.label || null
+    })).filter(e => e.source_step_id && e.target_step_id);
+
+    if (edgesToInsert.length > 0) {
+        const { error: edgeErr } = await supabase.from('journey_edges').insert(edgesToInsert);
+        if (edgeErr) throw edgeErr;
     }
 
     return { stepsCount: nodes.length, edgesCount: edges.length };
+}
+
+/**
+ * Manually enrolls a specific lead into a specific journey.
+ */
+export async function enrollLeadInJourney(supabase: SupabaseClient, tenantId: string, leadId: string, journeyId: string) {
+    // 1. Ensure steps are normalized
+    const { data: triggerStep } = await supabase
+        .from('journey_steps')
+        .select('id')
+        .eq('journey_id', journeyId)
+        .eq('step_type', 'trigger')
+        .maybeSingle();
+
+    if (!triggerStep) {
+        throw new Error("Jornada não possui um Gatilho (Trigger). Adicione um gatilho no editor.");
+    }
+
+    // Find the first action after the trigger
+    const { data: firstEdge } = await supabase
+        .from('journey_edges')
+        .select('target_step_id')
+        .eq('source_step_id', triggerStep.id)
+        .maybeSingle();
+
+    if (!firstEdge) {
+        throw new Error("Esta jornada não possui ações conectadas ao gatilho.");
+    }
+
+    // 2. Enroll lead
+    const { data: enrollment, error: enrollErr } = await supabase
+        .from('journey_enrollments')
+        .insert({
+            journey_id: journeyId,
+            lead_id: leadId,
+            tenant_id: tenantId,
+            status: 'active',
+            current_step_id: firstEdge.target_step_id
+        })
+        .select()
+        .single();
+
+    if (enrollErr) {
+        if (enrollErr.code === '23505') {
+            throw new Error("Este lead já está inscrito nesta jornada.");
+        }
+        throw enrollErr;
+    }
+
+    // 3. Start immediate execution
+    await executeStep(supabase, enrollment.id);
+
+    return enrollment;
 }
 
 /**
@@ -338,19 +414,22 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                 break;
 
             case 'wait':
-                // For wait, we calculated the next run time
                 const waitValue = parseInt(currentStep.config?.waitValue || '1');
                 const waitUnit = currentStep.config?.waitUnit || 'days';
 
-                // Save specific wait info in metadata for the scheduler
+                // Save specific wait info for the background worker
+                const waitTime = waitUnit === 'days' ? waitValue * 86400000 : waitValue * 3600000;
+                const nextRun = new Date(Date.now() + waitTime).toISOString();
+
                 await supabase.from('journey_enrollments').update({
-                    metadata: {
-                        ...enrollment.metadata,
-                        waiting_until: new Date(Date.now() + (waitUnit === 'days' ? waitValue * 86400000 : waitValue * 3600000)).toISOString()
-                    }
+                    waiting_until: nextRun,
+                    updated_at: new Date().toISOString()
                 }).eq('id', enrollmentId);
 
-                await supabase.from('journey_step_logs').update({ status: 'pending' }).eq('id', logEntry?.id);
+                await supabase.from('journey_step_logs').update({
+                    status: 'pending',
+                    metadata: { waiting_until: nextRun }
+                }).eq('id', logEntry?.id);
                 return;
 
             default:
@@ -394,6 +473,7 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
             // Move to next step
             await supabase.from('journey_enrollments').update({
                 current_step_id: targetId,
+                waiting_until: null, // Clear any pending wait
                 updated_at: new Date().toISOString()
             }).eq('id', enrollmentId);
 
@@ -466,26 +546,24 @@ async function checkCondition(supabase: SupabaseClient, config: any, leadId: str
 export async function processPendingWaits(supabase: SupabaseClient) {
     const now = new Date().toISOString();
 
-    // Find active enrollments where metadata.waiting_until is in the past
+    // 1. Find enrollments where waiting_until is <= now
     const { data: dueEnrollments, error } = await supabase
         .from('journey_enrollments')
-        .select('id, current_step_id, journey_id, metadata')
+        .select('id, current_step_id, journey_id')
         .eq('status', 'active')
+        .lte('waiting_until', now)
         .not('current_step_id', 'is', null);
 
     if (error) {
-        console.error("Error fetching enrollments for wait check:", error);
+        console.error("Error fetching due enrollments:", error);
         return { processed: 0, error };
     }
 
-    const filtered = dueEnrollments?.filter(e => {
-        const waitingUntil = (e.metadata as any)?.waiting_until;
-        return waitingUntil && waitingUntil < now;
-    }) || [];
+    if (!dueEnrollments?.length) return { processed: 0 };
 
-    if (!filtered.length) return { processed: 0 };
+    console.log(`[WORKER] Processing ${dueEnrollments.length} due enrollments...`);
 
-    for (const enrollment of filtered) {
+    for (const enrollment of dueEnrollments) {
         // Move lead to the next logical step after the Wait node
         const { data: edges } = await supabase
             .from('journey_edges')
@@ -493,17 +571,24 @@ export async function processPendingWaits(supabase: SupabaseClient) {
             .eq('source_step_id', enrollment.current_step_id);
 
         if (edges?.length) {
-            // Update enrollment to next step
+            // Update enrollment to next step and clear wait
             await supabase.from('journey_enrollments').update({
                 current_step_id: edges[0].target_step_id,
+                waiting_until: null,
                 updated_at: new Date().toISOString()
             }).eq('id', enrollment.id);
 
             // Trigger execution for the new step
-            await executeStep(supabase, enrollment.id);
+            executeStep(supabase, enrollment.id);
+        } else {
+            // If no next step after wait, finish
+            await supabase.from('journey_enrollments').update({
+                status: 'completed',
+                waiting_until: null,
+                completed_at: new Date().toISOString()
+            }).eq('id', enrollment.id);
         }
     }
 
-    return { processed: filtered.length };
+    return { processed: dueEnrollments.length };
 }
-

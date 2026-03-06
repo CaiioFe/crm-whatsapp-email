@@ -125,6 +125,12 @@ export default function SettingsPage() {
         const config = whatsappConfigs[provider];
         setIsSaving(provider);
         try {
+            if (config.apiKey === "sua_api_key_aqui") {
+                toast.error("Chave inválida", "Por favor, insira sua Global API Key real.");
+                setIsSaving(null);
+                return;
+            }
+
             const baseUrl = config.apiUrl?.replace(/\/$/, "");
             const res = await fetch("/api/whatsapp/config", {
                 method: "POST",
@@ -138,8 +144,11 @@ export default function SettingsPage() {
             });
             if (res.ok) {
                 toast.success("Configuração salva!", "Os dados do WhatsApp foram atualizados.");
+                // Update local status to reflect it's being tested or saved
+                updateConfig(provider, { status: "unconfigured" }, "whatsapp");
             } else {
-                toast.error("Erro ao salvar", "Verifique os dados e tente novamente.");
+                const data = await res.json();
+                toast.error("Erro ao salvar", data.error || "Verifique os dados e tente novamente.");
             }
         } catch (err) {
             toast.error("Erro inesperado", "Houve um problema ao processar sua solicitação.");
@@ -174,7 +183,8 @@ export default function SettingsPage() {
     const checkEvolutionStatus = async () => {
         try {
             updateConfig("evolution", { status: "testing" }, "whatsapp");
-            const res = await fetch("/api/whatsapp/evolution/connect");
+            // Using /status which mocks connectionState for better reliability
+            const res = await fetch("/api/whatsapp/evolution/status");
             const data = await res.json();
 
             console.log("[SETTINGS] Evolution Status Check:", data);
@@ -185,7 +195,8 @@ export default function SettingsPage() {
                 data.instance?.status === "open" ||
                 data.state === "open" ||
                 data.status === "open" ||
-                data.connectionStatus === "open";
+                data.connectionStatus === "open" ||
+                data.instance?.connectionStatus === "open";
 
             if (isConnected) {
                 updateConfig("evolution", { status: "connected" }, "whatsapp");
@@ -193,8 +204,13 @@ export default function SettingsPage() {
                 toast.success("Conectado com Sucesso!", "Sua instância da Evolution API está ativa.");
             } else {
                 updateConfig("evolution", { status: "error" }, "whatsapp");
-                const msg = data.error || data.message || "A instância não está conectada ao celular.";
-                toast.error("Falha na conexão", msg);
+                const msg = data.error || data.message || (data.response?.message) || "A instância não está conectada ao celular.";
+
+                if (res.status === 401) {
+                    toast.error("Erro de Autenticação", "A Global API Key está incorreta ou expirou.");
+                } else {
+                    toast.error("Falha na conexão", typeof msg === 'string' ? msg : "Erro desconhecido");
+                }
             }
         } catch (err) {
             console.error("[SETTINGS] Evolution Status Error:", err);

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X, Send, Loader2, MessageCircle } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { useToast } from "@/components/ui/Toast";
 
 interface SendWhatsAppModalProps {
     open: boolean;
@@ -17,6 +17,7 @@ interface SendWhatsAppModalProps {
 export function SendWhatsAppModal({ open, onClose, lead }: SendWhatsAppModalProps) {
     const [message, setMessage] = useState("");
     const [isSending, setIsSending] = useState(false);
+    const toast = useToast();
 
     if (!open) return null;
 
@@ -34,15 +35,15 @@ export function SendWhatsAppModal({ open, onClose, lead }: SendWhatsAppModalProp
             });
 
             if (res.ok) {
-                toast.success("Mensagem enviada!");
+                toast.success("Mensagem enviada!", "Sua mensagem via WhatsApp foi entregue.");
                 setMessage("");
                 onClose();
             } else {
                 const data = await res.json();
-                toast.error(data.error || "Erro ao enviar mensagem");
+                toast.error("Erro ao enviar", data.error || "Não foi possível enviar a mensagem.");
             }
         } catch (err) {
-            toast.error("Erro de conexão");
+            toast.error("Erro técnico", "Houve um problema de rede ou no servidor.");
         } finally {
             setIsSending(false);
         }

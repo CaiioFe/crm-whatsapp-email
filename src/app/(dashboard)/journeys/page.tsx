@@ -12,7 +12,8 @@ import {
     Target,
     Loader2,
     Search,
-    Filter
+    Filter,
+    Activity
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
@@ -176,6 +177,13 @@ export default function JourneysPage() {
                 >
                     Execuções Ao Vivo
                 </button>
+                <Link
+                    href="/journeys/logs"
+                    className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all text-zinc-500 hover:text-brand-primary flex items-center gap-2"
+                >
+                    <Activity size={14} />
+                    Logs de Execução
+                </Link>
             </div>
 
             {/* Controls */}
@@ -376,6 +384,14 @@ export default function JourneysPage() {
                                                                 <Target size={14} className="rotate-45" />
                                                             </button>
                                                         )}
+
+                                                        <Link
+                                                            href={`/journeys/logs?enrollmentId=${e.id}`}
+                                                            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors text-zinc-400"
+                                                            title="Ver logs da execução"
+                                                        >
+                                                            <Clock size={14} />
+                                                        </Link>
 
                                                         <button className="p-2 hover:bg-zinc-100 rounded-xl transition-colors text-zinc-400">
                                                             <MoreHorizontal size={14} />

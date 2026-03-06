@@ -5,16 +5,15 @@ import {
     ShieldCheck,
     Activity,
     CreditCard,
-    ExternalLink,
     ChevronRight,
-    Search,
-    UserPlus,
     LayoutDashboard
 } from "lucide-react";
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/rbac";
+import { AdminUserList } from "@/components/admin/AdminUserList";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 
 export default async function AdminDashboardPage() {
     // 🛡️ RBAC Enforcement
@@ -101,44 +100,8 @@ export default async function AdminDashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Users List */}
-                <div className="lg:col-span-2 card p-6 space-y-6">
-                    <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
-                        <div className="flex items-center gap-3">
-                            <Users size={18} className="text-zinc-400" />
-                            <h2 className="font-bold text-lg">Usuários e Permissões</h2>
-                        </div>
-                        <button className="flex items-center gap-2 text-xs font-bold text-brand-primary hover:bg-brand-primary/5 px-3 py-1.5 rounded-lg transition-colors">
-                            <UserPlus size={14} />
-                            Convidar
-                        </button>
-                    </div>
-
-                    <div className="space-y-1">
-                        {members?.map(member => (
-                            <div key={member.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-zinc-50 transition-colors border border-transparent hover:border-zinc-100 group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center font-bold text-zinc-400 group-hover:bg-brand-primary/10 group-hover:text-brand-primary transition-colors">
-                                        {member.display_name?.charAt(0) || 'U'}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-sm text-zinc-800">{member.display_name}</p>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-[10px] font-black uppercase tracking-widest ${member.role === 'admin' ? 'text-brand-primary' : 'text-zinc-400'
-                                                }`}>
-                                                {member.role}
-                                            </span>
-                                            {member.role === 'admin' && <ShieldCheck size={10} className="text-brand-primary" />}
-                                        </div>
-                                    </div>
-                                </div>
-                                <button className="p-2 text-zinc-400 hover:text-brand-primary rounded-lg hover:bg-white transition-all shadow-sm opacity-0 group-hover:opacity-100">
-                                    <Settings size={14} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                {/* Users List (Client Component) */}
+                <AdminUserList initialMembers={members || []} currentUserId={user?.id} />
 
                 {/* Sidebar Cards */}
                 <div className="space-y-6">
@@ -190,26 +153,3 @@ export default async function AdminDashboardPage() {
     );
 }
 
-function AdminStatCard({ label, value, icon: Icon, color }: { label: string, value: string | number, icon: any, color: string }) {
-    const colors: Record<string, string> = {
-        blue: "text-blue-500 bg-blue-50",
-        indigo: "text-indigo-500 bg-indigo-50",
-        purple: "text-purple-500 bg-purple-50",
-        emerald: "text-emerald-500 bg-emerald-50",
-    };
-
-    return (
-        <div className="card p-5 group hover:border-brand-primary/20 transition-all border-2 border-transparent">
-            <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 rounded-xl transition-transform group-hover:scale-110 ${colors[color]}`}>
-                    <Icon size={18} />
-                </div>
-                <div className="w-1.5 h-1.5 rounded-full bg-zinc-200 group-hover:bg-brand-primary transition-colors" />
-            </div>
-            <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{label}</span>
-                <p className="text-2xl font-black text-zinc-800 group-hover:text-zinc-900">{value}</p>
-            </div>
-        </div>
-    );
-}

@@ -104,9 +104,9 @@ export function Sidebar() {
                 {/* Collapse toggle (Desktop) */}
                 <button
                     onClick={toggleSidebar}
-                    className="hidden md:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-brand-primary text-white items-center justify-center shadow-lg hover:scale-110 transition-transform z-50 border-2 border-white/10"
+                    className="hidden md:flex absolute -right-4 top-24 w-8 h-8 rounded-xl bg-brand-primary text-white items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:scale-110 active:scale-95 transition-all z-50 border-2 border-white/20 group"
                 >
-                    {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                    {isCollapsed ? <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" /> : <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" />}
                 </button>
                 {/* Logo */}
                 <div className={`flex items-center gap-3 py-5 border-b border-white/10 transition-all ${isCollapsed ? "px-5" : "px-6"}`}>
@@ -117,9 +117,15 @@ export function Sidebar() {
                         CR
                     </div>
                     {!isCollapsed && (
-                        <div className="animate-in fade-in slide-in-from-left-2">
-                            <h1 className="text-white font-semibold text-sm">CRM Hub</h1>
-                            <p className="text-xs" style={{ color: "var(--sidebar-text)" }}>
+                        <div className="animate-in fade-in slide-in-from-left-2 flex-1">
+                            <div className="flex items-center justify-between">
+                                <h1 className="text-white font-black text-xs uppercase tracking-widest">CRM Hub</h1>
+                                <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-[8px] font-black text-emerald-500 uppercase">Live</span>
+                                </div>
+                            </div>
+                            <p className="text-[9px] font-medium" style={{ color: "var(--sidebar-text)" }}>
                                 WhatsApp & Email
                             </p>
                         </div>

@@ -1,48 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { X, User, Mail, Phone, Building2, Briefcase, Tag, Save } from "lucide-react";
+import { X, User, Mail, Phone, Building2, Briefcase, Tag, Save, Instagram, BarChart3, Loader2 } from "lucide-react";
 
 interface CreateLeadModalProps {
     open: boolean;
     onClose: () => void;
-    onSave?: (data: Record<string, string>) => void;
+    onSave?: (data: Record<string, any>) => Promise<void>;
+    stages?: any[];
+    availableTags?: any[];
 }
 
-const STAGES = [
-    { id: "novo", name: "Novo", color: "#6366f1" },
-    { id: "contato", name: "Contato", color: "#3b82f6" },
-    { id: "qualificado", name: "Qualificado", color: "#f59e0b" },
-    { id: "proposta", name: "Proposta", color: "#f97316" },
-];
-
-const AVAILABLE_TAGS = [
-    { name: "VIP", color: "#f59e0b" },
-    { name: "Webinar", color: "#3b82f6" },
-    { name: "Ebook", color: "#22c55e" },
-    { name: "Trial", color: "#8b5cf6" },
-    { name: "Enterprise", color: "#ef4444" },
-    { name: "Indicação", color: "#ec4899" },
-];
-
-export function CreateLeadModal({ open, onClose, onSave }: CreateLeadModalProps) {
+export function CreateLeadModal({ open, onClose, onSave, stages = [], availableTags = [] }: CreateLeadModalProps) {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
     const [company, setCompany] = useState("");
     const [position, setPosition] = useState("");
-    const [stage, setStage] = useState("novo");
+    const [instagram, setInstagram] = useState("");
+    const [revenue, setRevenue] = useState("");
+    const [stage, setStage] = useState(stages[0]?.id || "");
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Update stage if stages load later
+    useState(() => {
+        if (stages.length > 0 && !stage) setStage(stages[0].id);
+    });
 
     if (!open) return null;
 
-    const handleSave = () => {
-        if (!name.trim()) return;
-        onSave?.({ name, email, phone, company, position, stage, tags: selectedTags.join(",") });
-        // Reset
-        setName(""); setEmail(""); setPhone(""); setCompany(""); setPosition("");
-        setStage("novo"); setSelectedTags([]);
-        onClose();
+    const handleSave = async () => {
+        if (!name.trim() || isSaving) return;
+        setIsSaving(true);
+        try {
+            await onSave?.({ name, email, phone, company, position, instagram, revenue, stage, tags: selectedTags.join(",") });
+            // Reset
+            setName(""); setEmail(""); setPhone(""); setCompany(""); setPosition("");
+            setInstagram(""); setRevenue("");
+            setStage(stages[0]?.id || ""); setSelectedTags([]);
+            onClose();
+        } catch (err) {
+            console.error("Failed to save lead:", err);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const toggleTag = (tag: string) => {
@@ -149,18 +151,48 @@ export function CreateLeadModal({ open, onClose, onSave }: CreateLeadModalProps)
                         </div>
                     </div>
 
+                    {/* Instagram & Revenue */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-[10px] font-bold block mb-1" style={{ color: "var(--text-muted)" }}>INSTAGRAM</label>
+                            <div className="relative">
+                                <Instagram size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                                <input
+                                    value={instagram}
+                                    onChange={(e) => setInstagram(e.target.value)}
+                                    placeholder="@usuario"
+                                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm"
+                                    style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold block mb-1" style={{ color: "var(--text-muted)" }}>FATURAMENTO</label>
+                            <div className="relative">
+                                <BarChart3 size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                                <input
+                                    value={revenue}
+                                    onChange={(e) => setRevenue(e.target.value)}
+                                    placeholder="Ex: 50k - 100k"
+                                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border text-sm"
+                                    style={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Stage */}
                     <div>
                         <label className="text-[10px] font-bold block mb-1.5" style={{ color: "var(--text-muted)" }}>ESTÁGIO INICIAL</label>
                         <div className="flex gap-2 flex-wrap">
-                            {STAGES.map((s) => (
+                            {stages.map((s) => (
                                 <button
                                     key={s.id}
                                     type="button"
                                     onClick={() => setStage(s.id)}
-                                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                                    className="px-3 py-1.5 rounded-full text-[11px] font-bold transition-all border uppercase tracking-wider"
                                     style={{
-                                        background: stage === s.id ? `${s.color}20` : "transparent",
+                                        background: stage === s.id ? `${s.color}15` : "transparent",
                                         borderColor: stage === s.id ? s.color : "var(--border)",
                                         color: stage === s.id ? s.color : "var(--text-secondary)",
                                     }}
@@ -178,24 +210,25 @@ export function CreateLeadModal({ open, onClose, onSave }: CreateLeadModalProps)
                             TAGS
                         </label>
                         <div className="flex gap-2 flex-wrap">
-                            {AVAILABLE_TAGS.map((tag) => {
+                            {availableTags.map((tag) => {
                                 const isSelected = selectedTags.includes(tag.name);
                                 return (
                                     <button
                                         key={tag.name}
                                         type="button"
                                         onClick={() => toggleTag(tag.name)}
-                                        className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border"
+                                        className="px-2.5 py-1 rounded-full text-[10px] font-black transition-all border uppercase tracking-widest"
                                         style={{
-                                            background: isSelected ? `${tag.color}20` : "transparent",
-                                            borderColor: isSelected ? tag.color : "var(--border)",
-                                            color: isSelected ? tag.color : "var(--text-muted)",
+                                            background: isSelected ? `${tag.color || '#8b5cf6'}15` : "transparent",
+                                            borderColor: isSelected ? (tag.color || '#8b5cf6') : "var(--border)",
+                                            color: isSelected ? (tag.color || '#8b5cf6') : "var(--text-muted)",
                                         }}
                                     >
                                         {tag.name}
                                     </button>
                                 );
                             })}
+                            {availableTags.length === 0 && <span className="text-[10px] text-zinc-400 italic">Nenhuma tag cadastrada</span>}
                         </div>
                     </div>
                 </div>
@@ -205,12 +238,12 @@ export function CreateLeadModal({ open, onClose, onSave }: CreateLeadModalProps)
                     <button onClick={onClose} className="btn-secondary text-sm flex-1">Cancelar</button>
                     <button
                         onClick={handleSave}
-                        disabled={!name.trim()}
-                        className="btn-primary text-sm flex-1"
-                        style={{ opacity: name.trim() ? 1 : 0.5 }}
+                        disabled={!name.trim() || isSaving}
+                        className="btn-primary text-sm flex-1 h-11"
+                        style={{ opacity: name.trim() && !isSaving ? 1 : 0.5 }}
                     >
-                        <Save size={14} />
-                        Salvar Lead
+                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        {isSaving ? "Salvando..." : "Salvar Lead"}
                     </button>
                 </div>
             </div>

@@ -2,8 +2,9 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Mail, Phone, Clock, Flame, Shield, User } from "lucide-react";
+import { Mail, Phone, Clock, Flame, Shield, User, GitBranch, Zap } from "lucide-react";
 import type { Lead, Tag } from "@/types/database";
+import { useFeatureFlag } from "@/components/layout/FeatureFlagProvider";
 
 interface LeadCardProps {
     lead: Lead & { tags: Tag[] };
@@ -11,21 +12,7 @@ interface LeadCardProps {
     isDragging?: boolean;
 }
 
-function timeAgo(dateStr: string | null): string {
-    if (!dateStr) return "sem data";
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return "sem data";
-    const diff = Date.now() - date.getTime();
-    if (diff < 0) return "agora";
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return `agora`;
-    if (mins < 60) return `${mins}m`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d`;
-    return `${Math.floor(days / 30)}mês`;
-}
+import { timeAgo, getInitials } from "@/lib/utils";
 
 function getScoreTheme(score: number) {
     if (score >= 80) return { color: "#ff4d4d", label: "Hot", bg: "rgba(255, 77, 77, 0.15)" };
@@ -33,17 +20,8 @@ function getScoreTheme(score: number) {
     return { color: "#94a3b8", label: "Cold", bg: "rgba(148, 163, 184, 0.15)" };
 }
 
-function getInitials(name: string) {
-    return name
-        .split(" ")
-        .filter(n => n.length > 0)
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .substring(0, 2);
-}
-
 export function LeadCard({ lead, onClick }: LeadCardProps) {
+    const isJourneyEnabled = useFeatureFlag('journey_engine');
     const {
         attributes,
         listeners,
@@ -76,8 +54,9 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
                 rounded-xl p-4 mb-3 cursor-grab active:cursor-grabbing 
                 border border-white/[0.05] hover:border-brand-primary/50
                 shadow-sm hover:shadow-xl
-                transition-all duration-200 select-none
-                ${isDragging ? "shadow-2xl ring-1 ring-brand-primary/50 rotate-1 scale-[1.02]" : ""}
+                transition-transform duration-150 select-none
+                will-change-transform
+                ${isDragging ? "shadow-2xl ring-1 ring-brand-primary/50 rotate-1 scale-[1.02] opacity-50 z-[100]" : ""}
             `}
             role="button"
             tabIndex={0}
@@ -139,8 +118,20 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
                 <div className="flex-1" />
 
                 <div className="flex items-center gap-2">
-                    {lead.email && <Mail size={12} className="text-zinc-500 hover:text-brand-primary" />}
-                    {lead.phone && <Phone size={12} className="text-zinc-500 hover:text-brand-primary" />}
+                    {lead.email && <Mail size={12} className="text-zinc-500 hover:text-brand-primary cursor-pointer" onClick={(e) => e.stopPropagation()} />}
+                    {lead.phone && <Phone size={12} className="text-zinc-500 hover:text-brand-primary cursor-pointer" onClick={(e) => e.stopPropagation()} />}
+                    {isJourneyEnabled && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                (window as any).openEnrollModal?.(lead.id, lead.name);
+                            }}
+                            className="p-1 hover:bg-brand-primary/10 rounded-lg text-zinc-500 hover:text-brand-primary transition-colors"
+                            title="Atribuir Jornada"
+                        >
+                            <Zap size={12} className="text-amber-500" />
+                        </button>
+                    )}
                 </div>
             </div>
 

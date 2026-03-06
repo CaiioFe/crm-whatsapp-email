@@ -56,10 +56,9 @@ export async function POST(request: NextRequest) {
 
         const journey = result.data;
 
-        // NEW: Normalization logic for active journeys
         if (status === 'active') {
             const { normalizeJourney } = await import("@/lib/journeys");
-            await normalizeJourney(supabase, journey.id, profile.tenant_id, canvas_data);
+            await normalizeJourney(supabase, journey.id, profile.tenant_id, journeyData.canvas_data);
         }
 
         return new Response(JSON.stringify(journey), {
@@ -67,10 +66,13 @@ export async function POST(request: NextRequest) {
             headers: { "Content-Type": "application/json" }
         });
 
-    } catch (err) {
+    } catch (err: any) {
+        console.error("[JOURNEY SAVE ERROR]:", err);
+        const errorMessage = err.message || (typeof err === "string" ? err : "Internal Server Error");
         return new Response(
             JSON.stringify({
-                error: err instanceof Error ? err.message : "Internal Server Error",
+                error: errorMessage,
+                details: typeof err === 'object' ? { message: err.message, code: err.code, hint: err.hint } : err
             }),
             { status: 500, headers: { "Content-Type": "application/json" } }
         );

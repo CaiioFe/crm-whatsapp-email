@@ -6,7 +6,10 @@ import {
     ChevronRight,
     ArrowLeft,
     ArrowRight,
+    GitBranch,
+    Zap
 } from "lucide-react";
+import { timeAgo, scoreColor } from "@/lib/utils";
 import type { Lead, PipelineStage, Tag } from "@/types/database";
 
 interface MobileListProps {
@@ -16,23 +19,6 @@ interface MobileListProps {
     onSwipeMove: (leadId: string, direction: "left" | "right") => void;
 }
 
-function timeAgo(dateStr: string | null): string {
-    if (!dateStr) return "—";
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}min`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d`;
-    return `${Math.floor(days / 30)}m`;
-}
-
-function scoreColor(score: number): string {
-    if (score >= 71) return "#22c55e";
-    if (score >= 31) return "#f59e0b";
-    return "#94a3b8";
-}
 
 export function MobileList({ stages, leads, onLeadClick, onSwipeMove }: MobileListProps) {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -165,9 +151,21 @@ export function MobileList({ stages, leads, onLeadClick, onSwipeMove }: MobileLi
                                                         ))}
                                                     </div>
                                                 </div>
-                                                <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: "var(--text-muted)" }}>
-                                                    {timeAgo(lead.last_interaction_at)}
-                                                </span>
+                                                <div className="flex flex-col items-end gap-2">
+                                                    <span className="text-[10px] flex-shrink-0 ml-2" style={{ color: "var(--text-muted)" }}>
+                                                        {timeAgo(lead.last_interaction_at)}
+                                                    </span>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            (window as any).openEnrollModal?.(lead.id, lead.name);
+                                                        }}
+                                                        className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 transition-all active:scale-90"
+                                                        title="Atribuir Jornada"
+                                                    >
+                                                        <Zap size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))

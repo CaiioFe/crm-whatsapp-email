@@ -275,7 +275,10 @@ function JourneyEditorContent() {
                 body: JSON.stringify(body),
             });
 
-            if (!res.ok) throw new Error("Erro ao salvar");
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Erro ao salvar");
+            }
             const data = await res.json();
 
             if (!id) {
@@ -284,8 +287,8 @@ function JourneyEditorContent() {
             }
 
             success("Sucesso", status === 'active' ? "Jornada ativada com sucesso!" : "Progresso salvo com sucesso.");
-        } catch (err) {
-            error("Erro ao salvar", "Ocorreu um problema ao persistir a jornada.");
+        } catch (err: any) {
+            error("Erro ao salvar", err.message || "Ocorreu um problema ao persistir a jornada.");
         } finally {
             setIsSaving(false);
         }
@@ -404,8 +407,8 @@ function JourneyEditorContent() {
                                 return config?.color || "#94a3b8";
                             }}
                             maskColor="rgba(0,0,0,0.05)"
-                            className="!bg-white/80 !backdrop-blur-sm !border !border-white/20 !rounded-xl !shadow-lg"
-                            style={{ height: 100, width: 150 }}
+                            className="!bg-white/40 !backdrop-blur-md !border !border-white/20 !rounded-xl !shadow-sm"
+                            style={{ height: 60, width: 100 }}
                             zoomable
                             pannable
                         />

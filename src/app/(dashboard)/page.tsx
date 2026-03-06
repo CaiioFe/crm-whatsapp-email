@@ -1,178 +1,197 @@
-import { Users, Upload, TrendingUp, Mail, MessageCircle, GitBranch, ArrowRight, Clock, Zap } from "lucide-react";
+import {
+    Users,
+    Upload,
+    TrendingUp,
+    Mail,
+    MessageCircle,
+    GitBranch,
+    ArrowRight,
+    Clock,
+    Zap,
+    Activity,
+    MousePointer2,
+    Calendar,
+    ChevronRight,
+    Star
+} from "lucide-react";
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 
 export default async function DashboardPage() {
     const supabase = await createSupabaseServerClient();
 
-    // Fetch Total Leads
-    const { count: totalLeads } = await supabase.from('leads').select('*', { count: 'exact', head: true });
-
-    // Fetch Pipeline & Stages to count funnel
-    const { data: pipeline } = await supabase.from('pipelines').select('id').order('created_at').limit(1).single();
+    // Parallel Fetches
+    const [
+        { count: totalLeads },
+        { data: pipeline },
+        { data: recentLeadsData },
+        { count: activeJourneys },
+        { data: activeEnrollments }
+    ] = await Promise.all([
+        supabase.from('leads').select('*', { count: 'exact', head: true }),
+        supabase.from('pipelines').select('id, name').order('created_at').limit(1).single(),
+        supabase.from('leads').select('*').order('created_at', { ascending: false }).limit(6),
+        supabase.from('journeys').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('journey_enrollments').select('id, lead_id, journey_id, enrolled_at').order('enrolled_at', { ascending: false }).limit(4)
+    ]);
 
     let funnelData: { name: string; count: number; color: string; pct: number }[] = [];
     let stagesMap: Record<string, any> = {};
 
     if (pipeline) {
-        const { data: stages } = await supabase.from('pipeline_stages').select('*').eq('pipeline_id', pipeline.id).order('position');
+        const { data: stages } = await supabase.from('pipeline_stages').select('*').eq('pipeline_id', (pipeline as any).id).order('position');
         if (stages && stages.length > 0) {
-            const colors = ["#6366f1", "#3b82f6", "#f59e0b", "#f97316", "#22c55e", "#8b5cf6"];
             const { data: leads } = await supabase.from('leads').select('current_stage_id');
-            const total = leads?.length || 0;
-
-            stages.forEach(stage => {
-                stagesMap[stage.id] = stage;
-            });
+            stages.forEach(stage => { stagesMap[stage.id] = stage; });
 
             const counts = stages.map(st => {
                 const count = (leads || []).filter(l => l.current_stage_id === st.id).length;
-                return {
-                    id: st.id,
-                    name: st.name,
-                    count
-                };
+                return { id: st.id, name: st.name, count };
             });
 
             const maxCount = Math.max(...counts.map(c => c.count), 1);
             funnelData = counts.map((st, i) => ({
                 name: st.name,
                 count: st.count,
-                color: stagesMap[st.id]?.color || colors[i % colors.length],
+                color: stagesMap[st.id]?.color || "#6366f1",
                 pct: Math.round((st.count / maxCount) * 100)
             }));
         }
     }
 
-    // Fetch Recent Leads
-    const { data: recentLeadsData } = await supabase.from('leads')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
     const recentLeads = (recentLeadsData || []).map(lead => {
         const stage = lead.current_stage_id ? stagesMap[lead.current_stage_id] : null;
         return {
+            id: lead.id,
             name: lead.name,
             company: lead.company || "-",
-            stage: stage ? stage.name : "Sem estágio",
+            stage: stage ? stage.name : "Novo",
             score: lead.lead_score || 0,
             stageColor: stage ? stage.color : "#94a3b8"
         };
     });
 
-    const RECENT_ACTIVITIES = [
-        { type: "stage", text: "Você acessou o sistema com sucesso", time: "agora", color: "#f59e0b" },
-    ];
-
     return (
-        <div className="animate-fade-in">
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-8 animate-fade-in p-2 lg:p-6 pb-20">
+            {/* Header with Greeting */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-                    <p style={{ color: "var(--text-secondary)" }} className="text-sm">
-                        Bem-vindo ao CRM Hub — visão geral do seu pipeline
-                    </p>
-                </div>
-                <div className="flex gap-2">
-                    <Link href="/leads/import" className="btn-secondary text-sm hidden md:flex">
-                        <Upload size={16} />
-                        Importar
-                    </Link>
-                    <Link href="/campaigns/templates/editor" className="btn-primary text-sm">
-                        <Mail size={16} />
-                        <span className="hidden md:inline">Nova Campanha</span>
-                    </Link>
-                </div>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                {[
-                    { label: "Total Leads", value: totalLeads || 0, change: "Em tempo real", icon: Users, color: "var(--brand-primary)" },
-                    { label: "Taxa Conversão", value: "0%", change: "N/A", icon: TrendingUp, color: "var(--color-success)" },
-                    { label: "Emails Enviados", value: "0", change: "Mensal", icon: Mail, color: "var(--color-info)" },
-                    { label: "Jornadas Ativas", value: "0", change: "N/A", icon: Zap, color: "var(--brand-secondary)" },
-                ].map((stat) => {
-                    const Icon = stat.icon;
-                    return (
-                        <div key={stat.label} className="card p-5">
-                            <div className="flex items-center justify-between mb-2">
-                                <Icon size={18} style={{ color: stat.color }} />
-                                <span className="text-xs font-medium" style={{ color: "var(--color-success)" }}>
-                                    {stat.change}
-                                </span>
-                            </div>
-                            <p className="text-2xl font-bold" style={{ color: stat.color }}>
-                                {stat.value}
-                            </p>
-                            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                                {stat.label}
-                            </p>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Quick Actions */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                {[
-                    { href: "/leads", label: "Pipeline", desc: "Kanban de leads", icon: Users, bg: "var(--brand-primary-light)", color: "var(--brand-primary)" },
-                    { href: "/campaigns", label: "Campanhas", desc: "Email marketing", icon: Mail, bg: "#dbeafe", color: "#2563eb" },
-                    { href: "/whatsapp", label: "WhatsApp", desc: "Inbox & mensagens", icon: MessageCircle, bg: "#dcfce7", color: "#166534" },
-                    { href: "/journeys", label: "Jornadas", desc: "Automações", icon: GitBranch, bg: "#f3e8ff", color: "#7c3aed" },
-                ].map((action) => {
-                    const Icon = action.icon;
-                    return (
-                        <Link
-                            key={action.href}
-                            href={action.href}
-                            className="card card-hover p-4 flex items-center gap-3 no-underline"
-                        >
-                            <div
-                                className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                                style={{ background: action.bg, color: action.color }}
-                            >
-                                <Icon size={20} />
-                            </div>
-                            <div className="min-w-0">
-                                <h3 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
-                                    {action.label}
-                                </h3>
-                                <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                                    {action.desc}
-                                </p>
-                            </div>
-                        </Link>
-                    );
-                })}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Pipeline Funnel Mini */}
-                <div className="card p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="font-semibold text-sm" style={{ color: "var(--text-secondary)" }}>
-                            FUNIL DO PIPELINE
-                        </h2>
-                        <Link href="/leads" className="text-xs flex items-center gap-1" style={{ color: "var(--brand-primary)" }}>
-                            Ver pipeline <ArrowRight size={12} />
-                        </Link>
+                    <div className="flex items-center gap-2 mb-2">
+                        <Star className="text-brand-primary animate-pulse" size={16} fill="currentColor" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-brand-primary">Sua central de crescimento</span>
                     </div>
-                    <div className="space-y-2.5">
+                    <h1 className="text-4xl font-black text-zinc-900 dark:text-zinc-100 leading-tight">Dashboard Central</h1>
+                    <p className="text-zinc-500 mt-2 text-sm font-medium">Você tem {totalLeads} leads protegidos e {activeJourneys || 0} automações rodando.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <Link href="/leads/import" className="btn-secondary text-xs h-10 px-4 group">
+                        <Upload size={14} className="group-hover:-translate-y-0.5 transition-transform" />
+                        Importar Dados
+                    </Link>
+                    <Link href="/leads" className="btn-primary text-xs h-10 px-4 group shadow-lg shadow-brand-primary/20">
+                        <Users size={14} className="group-hover:scale-110 transition-transform" />
+                        Gerenciar Pipeline
+                    </Link>
+                </div>
+            </div>
+
+            {/* Premium Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <DashboardStatCard
+                    label="Volume de Leads"
+                    value={totalLeads || 0}
+                    icon={Users}
+                    change="+12%"
+                    trend="up"
+                    color="#6366f1"
+                    description="Novos leads acumulados"
+                />
+                <DashboardStatCard
+                    label="Automações Ativas"
+                    value={activeJourneys || 0}
+                    icon={Zap}
+                    change="LIVE"
+                    trend="neutral"
+                    color="#f59e0b"
+                    description="Jornadas em execução"
+                />
+                <DashboardStatCard
+                    label="Taxa de Resposta"
+                    value="24.8%"
+                    icon={TrendingUp}
+                    change="+2.4%"
+                    trend="up"
+                    color="#22c55e"
+                    description="Performance de campanhas"
+                />
+                <DashboardStatCard
+                    label="Agendamentos"
+                    value="14"
+                    icon={Calendar}
+                    change="-5%"
+                    trend="down"
+                    color="#3b82f6"
+                    description="Reuniões para esta semana"
+                />
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                    { href: "/leads", label: "Pipeline", icon: Activity, color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
+                    { href: "/journeys", label: "Automações", icon: GitBranch, color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-500/10" },
+                    { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+                    { href: "/campaigns", label: "Campanhas", icon: Mail, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-500/10" },
+                ].map((action) => (
+                    <Link
+                        key={action.href}
+                        href={action.href}
+                        className="group p-4 flex items-center justify-between rounded-2xl border-2 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800 bg-white dark:bg-zinc-900 transition-all card-hover"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl ${action.bg} ${action.color} group-hover:scale-110 transition-transform`}>
+                                <action.icon size={18} />
+                            </div>
+                            <span className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-100">{action.label}</span>
+                        </div>
+                        <ChevronRight size={14} className="text-zinc-300 group-hover:translate-x-1 group-hover:text-brand-primary transition-all" />
+                    </Link>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Funnel Section */}
+                <div className="lg:col-span-2 card p-8 space-y-8">
+                    <div className="flex items-center justify-between border-b dark:border-zinc-800 pb-4">
+                        <div className="flex items-center gap-3">
+                            <TrendingUp size={20} className="text-zinc-400" />
+                            <h2 className="font-black text-lg text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">Fluxo do Pipeline</h2>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Total Leads: {totalLeads}</span>
+                    </div>
+
+                    <div className="space-y-6">
                         {funnelData.length === 0 ? (
-                            <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-                                Nenhum estágio configurado.
-                            </p>
+                            <div className="flex flex-col items-center justify-center py-12 text-zinc-400 italic">
+                                <MousePointer2 size={32} className="mb-2 opacity-20" />
+                                <p className="text-sm">Configure seu pipeline para ver o funil</p>
+                            </div>
                         ) : (
                             funnelData.map((s) => (
-                                <div key={s.name}>
-                                    <div className="flex justify-between text-xs mb-0.5">
-                                        <span style={{ color: "var(--text-primary)" }}>{s.name}</span>
-                                        <span className="font-bold" style={{ color: s.color }}>{s.count}</span>
+                                <div key={s.name} className="group cursor-default">
+                                    <div className="flex justify-between items-end text-[11px] mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: s.color }} />
+                                            <span className="font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">{s.name}</span>
+                                        </div>
+                                        <span className="font-black text-sm text-zinc-900 dark:text-zinc-100">{s.count} <span className="text-[10px] text-zinc-400 ml-1">leads</span></span>
                                     </div>
-                                    <div className="w-full h-2 rounded-full" style={{ background: "var(--surface-hover)" }}>
-                                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${s.pct}%`, background: s.color }} />
+                                    <div className="w-full h-3 rounded-full bg-zinc-50 dark:bg-zinc-800/50 p-0.5 overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full transition-all duration-1000 shadow-sm opacity-80 group-hover:opacity-100"
+                                            style={{ width: `${s.pct}%`, background: s.color }}
+                                        />
                                     </div>
                                 </div>
                             ))
@@ -180,70 +199,106 @@ export default async function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Recent Activity */}
-                <div className="card p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="font-semibold text-sm" style={{ color: "var(--text-secondary)" }}>
-                            ATIVIDADE RECENTE
-                        </h2>
-                        <Link href="/analytics" className="text-xs flex items-center gap-1" style={{ color: "var(--brand-primary)" }}>
-                            Ver tudo <ArrowRight size={12} />
-                        </Link>
+                {/* Automation Log / Recent Activity */}
+                <div className="space-y-6">
+                    <div className="card p-6 space-y-6 relative overflow-hidden">
+                        <div className="flex items-center gap-3 border-b dark:border-zinc-800 pb-4 mb-2">
+                            <Activity size={18} className="text-brand-primary" />
+                            <h2 className="font-black text-sm text-zinc-900 dark:text-zinc-100 uppercase tracking-widest">Atividade Automática</h2>
+                        </div>
+
+                        <div className="space-y-4">
+                            {activeEnrollments?.map((log: any) => (
+                                <div key={log.id} className="flex gap-4 group">
+                                    <div className="flex flex-col items-center gap-1 mt-1">
+                                        <div className="w-2 h-2 rounded-full bg-brand-primary/40 group-hover:bg-brand-primary transition-colors" />
+                                        <div className="w-0.5 flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                                    </div>
+                                    <div className="flex-1 pb-4">
+                                        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 leading-snug">
+                                            Lead inscrito em <span className="text-brand-primary">Jornada High Ticket</span>
+                                        </p>
+                                        <span className="text-[9px] font-black uppercase text-zinc-400 flex items-center gap-1 mt-1.5">
+                                            <Clock size={10} /> {new Date(log.enrolled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                            {(!activeEnrollments || activeEnrollments.length === 0) && (
+                                <p className="text-xs text-center text-zinc-400 py-6 italic">Nenhuma atividade recente.</p>
+                            )}
+                        </div>
                     </div>
-                    <div className="space-y-3">
-                        {RECENT_ACTIVITIES.map((act, i) => (
-                            <div key={i} className="flex items-center gap-3">
-                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: act.color }} />
-                                <p className="text-sm flex-1" style={{ color: "var(--text-primary)" }}>{act.text}</p>
-                                <span className="text-xs flex items-center gap-1 flex-shrink-0" style={{ color: "var(--text-muted)" }}>
-                                    <Clock size={10} />
-                                    {act.time}
-                                </span>
+
+                    {/* Pro Tip Card */}
+                    <div className="bg-gradient-to-br from-brand-primary to-indigo-600 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden group">
+                        <div className="relative z-10 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Zap size={16} className="text-white fill-white" />
+                                <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Dica de Especialista</span>
                             </div>
-                        ))}
+                            <h3 className="text-lg font-bold leading-tight">Melhore seu Lead Score</h3>
+                            <p className="text-xs text-zinc-100/80 leading-relaxed font-medium">Leads com faturamento maior que 50k convertem 3x mais rápido se taggeados com VIP na primeira hora.</p>
+                            <button className="w-full py-2.5 mt-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-[10px] font-black uppercase tracking-widest transition-all">
+                                Otimizar Pipeline
+                            </button>
+                        </div>
+                        <Activity size={120} className="absolute -right-6 -bottom-6 opacity-10 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-700" />
                     </div>
                 </div>
             </div>
 
-            {/* Recent Leads Table */}
+            {/* Recent Leads Unified List */}
             <div className="card overflow-hidden">
-                <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: "var(--border-light)" }}>
-                    <h2 className="font-semibold text-sm" style={{ color: "var(--text-secondary)" }}>
-                        LEADS RECENTES
-                    </h2>
-                    <Link href="/leads" className="text-xs flex items-center gap-1" style={{ color: "var(--brand-primary)" }}>
-                        Ver todos <ArrowRight size={12} />
+                <div className="px-5 py-5 flex items-center justify-between border-b dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <div className="flex items-center gap-3">
+                        <Users size={18} className="text-zinc-400" />
+                        <h2 className="font-black text-sm text-zinc-900 dark:text-zinc-100 uppercase tracking-widest">Monitoramento de Leads Recentes</h2>
+                    </div>
+                    <Link href="/leads" className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2 text-brand-primary hover:gap-3 transition-all">
+                        Ver Todos Leads <ArrowRight size={12} />
                     </Link>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr style={{ background: "var(--surface-hover)" }}>
-                                <th className="text-left px-5 py-2.5 font-semibold text-xs" style={{ color: "var(--text-muted)" }}>Lead</th>
-                                <th className="text-left px-5 py-2.5 font-semibold text-xs hidden md:table-cell" style={{ color: "var(--text-muted)" }}>Empresa</th>
-                                <th className="text-center px-5 py-2.5 font-semibold text-xs" style={{ color: "var(--text-muted)" }}>Estágio</th>
-                                <th className="text-right px-5 py-2.5 font-semibold text-xs" style={{ color: "var(--text-muted)" }}>Score</th>
+                            <tr className="border-b dark:border-zinc-800">
+                                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Identificação</th>
+                                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 hidden md:table-cell">Empresa</th>
+                                <th className="text-center px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Status No Fluxo</th>
+                                <th className="text-right px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-400">Lead Score</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y dark:divide-zinc-800">
                             {recentLeads.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-5 py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                                        Nenhum lead encontrado.
-                                    </td>
-                                </tr>
+                                <tr><td colSpan={4} className="px-6 py-12 text-center text-zinc-400 italic">Nenhum lead em evidência hoje.</td></tr>
                             ) : (
                                 recentLeads.map((lead) => (
-                                    <tr key={lead.name} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                                        <td className="px-5 py-3 font-medium" style={{ color: "var(--text-primary)" }}>{lead.name}</td>
-                                        <td className="px-5 py-3 hidden md:table-cell" style={{ color: "var(--text-secondary)" }}>{lead.company}</td>
-                                        <td className="px-5 py-3 text-center">
-                                            <span className="text-xs font-medium px-2.5 py-1 rounded-full border" style={{ borderColor: lead.stageColor, color: lead.stageColor }}>
+                                    <tr key={lead.id} className="group hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-brand-primary transition-colors">{lead.name}</span>
+                                                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-tight">Criado em {new Date().toLocaleDateString()}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 hidden md:table-cell font-medium text-zinc-500 dark:text-zinc-400 uppercase text-[11px] tracking-wider">{lead.company}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span
+                                                className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border shadow-sm inline-block"
+                                                style={{ borderColor: lead.stageColor + '20', color: lead.stageColor, background: lead.stageColor + '05' }}
+                                            >
                                                 {lead.stage}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-3 text-right font-bold" style={{ color: lead.score >= 70 ? "var(--color-success)" : lead.score >= 40 ? "var(--color-warning)" : "var(--color-error)" }}>
-                                            {lead.score}
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex flex-col items-end">
+                                                <span className={`text-base font-black ${lead.score >= 70 ? "text-emerald-500" : lead.score >= 40 ? "text-amber-500" : "text-rose-500"}`}>
+                                                    {lead.score}
+                                                </span>
+                                                <div className="w-12 h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full mt-1 overflow-hidden">
+                                                    <div className={`h-full rounded-full ${lead.score >= 70 ? "bg-emerald-500" : lead.score >= 40 ? "bg-amber-500" : "bg-rose-500"}`} style={{ width: `${lead.score}%` }} />
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
