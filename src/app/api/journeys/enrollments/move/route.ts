@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/rbac";
+import { executeStep } from "@/lib/journeys";
 
 export async function POST(request: NextRequest) {
     try {
@@ -32,13 +33,12 @@ export async function POST(request: NextRequest) {
 
         if (error) throw error;
 
-        // 2. Log manual override
-        await supabase.from('journey_step_logs').insert({
-            enrollment_id,
-            step_id: target_step_id,
-            status: 'completed',
-            result: { action: 'manual_override', detail: 'User moved lead to this step manually' },
-            completed_at: new Date().toISOString()
+        // We don't mark target_step_id as completed because we WANT the engine to execute it.
+        // Instead, we just trigger the engine immediately!
+
+        // Execute the new step asynchronously without awaiting so the API returns quickly
+        executeStep(supabase, enrollment_id).catch(err => {
+            console.error("[MOVE_STEP] Background execution error:", err);
         });
 
         return new Response(JSON.stringify({ success: true }), {
