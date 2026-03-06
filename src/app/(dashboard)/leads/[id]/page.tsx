@@ -28,6 +28,7 @@ import {
     Globe,
     BarChart3,
     MapPin,
+    Map,
     ArrowRight,
     Zap,
     Trash2,
@@ -36,6 +37,7 @@ import {
 import Link from "next/link";
 import { SendWhatsAppModal } from "@/components/ui/SendWhatsAppModal";
 import { EnrollJourneyModal } from "@/components/ui/EnrollJourneyModal";
+import { MoveStepModal } from "@/components/ui/MoveStepModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useToast } from "@/components/ui/Toast";
 import type { InteractionType, Interaction } from "@/types/database";
@@ -216,6 +218,8 @@ export default function LeadProfilePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
     const [showEnrollModal, setShowEnrollModal] = useState(false);
+    const [showMoveStepModal, setShowMoveStepModal] = useState(false);
+    const [moveData, setMoveData] = useState<{ enrollmentId: string, journeyId: string, journeyName: string, currentStepId?: string } | null>(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -336,6 +340,31 @@ export default function LeadProfilePage() {
             }
         } catch (err: any) {
             toastError("Erro", err.message);
+        }
+    };
+
+    const handleMoveStep = async (stepId: string) => {
+        if (!moveData) return;
+        try {
+            const res = await fetch('/api/journeys/enrollments/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enrollment_id: moveData.enrollmentId, target_step_id: stepId })
+            });
+
+            if (!res.ok) throw new Error("Erro ao mover lead");
+
+            toastSuccess("Sucesso", "Lead movido para a nova etapa. As ações serão executadas em breve.");
+
+            // Re-fetch
+            const resEnd = await fetch('/api/journeys/enrollments');
+            if (resEnd.ok) {
+                const data = await resEnd.json();
+                setEnrollmentsList(data.filter((e: any) => e.leads?.id === leadId));
+            }
+        } catch (err: any) {
+            toastError("Erro", err.message || "Erro ao mudar etapa do lead.");
+            console.error(err);
         }
     };
 
@@ -677,13 +706,31 @@ export default function LeadProfilePage() {
                                                             enr.status === 'completed' ? 'Finalizado' : 'Interrompido'}
                                                 </span>
                                                 {['active', 'paused'].includes(enr.status) && (
-                                                    <button
-                                                        onClick={() => terminateJourney(enr.id)}
-                                                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
-                                                        title="Terminar Automação"
-                                                    >
-                                                        <X size={14} />
-                                                    </button>
+                                                    <div className="flex bg-white dark:bg-zinc-800 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-700 p-0.5">
+                                                        <button
+                                                            onClick={() => {
+                                                                setMoveData({
+                                                                    enrollmentId: enr.id,
+                                                                    journeyId: enr.journeys.id,
+                                                                    journeyName: enr.journeys.name,
+                                                                    currentStepId: enr.journey_steps?.id
+                                                                });
+                                                                setShowMoveStepModal(true);
+                                                            }}
+                                                            className="p-1 px-2 rounded-md text-zinc-500 hover:text-brand-primary hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1 border-r border-zinc-100 dark:border-zinc-700 mr-0.5"
+                                                            title="Mover de Etapa / Pular"
+                                                        >
+                                                            <Map size={12} />
+                                                            <span className="text-[10px] font-bold">Mover</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => terminateJourney(enr.id)}
+                                                            className="p-1 px-2 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors flex items-center gap-1"
+                                                            title="Terminar Automação"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -933,6 +980,16 @@ export default function LeadProfilePage() {
                         description={`Tem certeza que deseja excluir ${lead.name}? Esta ação não pode ser desfeita.`}
                         confirmText={isDeleting ? "Excluindo..." : "Excluir Permanentemente"}
                     />
+                    {moveData && (
+                        <MoveStepModal
+                            open={showMoveStepModal}
+                            onClose={() => { setShowMoveStepModal(false); setMoveData(null); }}
+                            onMove={handleMoveStep}
+                            journeyId={moveData.journeyId}
+                            journeyName={moveData.journeyName}
+                            currentStepId={moveData.currentStepId}
+                        />
+                    )}
                 </>
             )}
         </div >

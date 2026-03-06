@@ -38,6 +38,7 @@ import {
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
+import { ActiveParticipantsModal } from "@/components/ui/journeys/ActiveParticipantsModal";
 
 // ============================
 // Custom Node Types
@@ -157,6 +158,7 @@ function JourneyEditorContent() {
     const [exitCriteria, setExitCriteria] = useState<any[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(!!id);
+    const [showParticipantsModal, setShowParticipantsModal] = useState(false);
 
     const [emailTemplates, setEmailTemplates] = useState<any[]>([]);
     const [pipelineStages, setPipelineStages] = useState<any[]>([]);
@@ -326,6 +328,15 @@ function JourneyEditorContent() {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    {id && (
+                        <button
+                            onClick={() => setShowParticipantsModal(true)}
+                            className="btn-secondary text-xs h-9 px-3 bg-brand-primary/10 text-brand-primary border-brand-primary/20 hover:bg-brand-primary/20"
+                        >
+                            <Users size={14} />
+                            Participantes
+                        </button>
+                    )}
                     <button
                         onClick={() => handleSave('draft')}
                         disabled={isSaving}
@@ -689,6 +700,15 @@ function JourneyEditorContent() {
                     </div>
                 </div>
             </div>
+
+            {id && showParticipantsModal && (
+                <ActiveParticipantsModal
+                    open={showParticipantsModal}
+                    onClose={() => setShowParticipantsModal(false)}
+                    journeyId={id}
+                    journeyName={journeyName}
+                />
+            )}
         </div>
     );
 }

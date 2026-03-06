@@ -1,7 +1,8 @@
+import { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/rbac";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const supabase = await createSupabaseServerClient();
 
@@ -21,8 +22,10 @@ export async function GET() {
 
         if (!profile) return new Response("Perfil não encontrado", { status: 404 });
 
-        // Fetch active enrollments with joins
-        const { data: enrollments, error } = await supabase
+        const { searchParams } = new URL(request.url);
+        const journeyId = searchParams.get('journey_id');
+
+        let query = supabase
             .from('journey_enrollments')
             .select(`
                 id,
@@ -34,6 +37,12 @@ export async function GET() {
             `)
             .eq('tenant_id', profile.tenant_id)
             .order('created_at', { ascending: false });
+
+        if (journeyId) {
+            query = query.eq('journey_id', journeyId);
+        }
+
+        const { data: enrollments, error } = await query;
 
         if (error) throw error;
 
