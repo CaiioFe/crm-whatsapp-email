@@ -150,7 +150,8 @@ function JourneyEditorContent() {
     const [id, setId] = useState<string | null>(searchParams.get("id"));
     const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
     const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
-    const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
     const [journeyName, setJourneyName] = useState("Nova Jornada Automática");
     const [description, setDescription] = useState("");
     const [exitCriteria, setExitCriteria] = useState<any[]>([]);
@@ -228,7 +229,7 @@ function JourneyEditorContent() {
                 },
             };
             setNodes((nds) => [...nds, newNode]);
-            setSelectedNode(newNode);
+            setSelectedNodeId(newNode.id);
             info("Node adicionado", `Ação de ${config.label} incluída.`);
         },
         [nodes.length, setNodes, info]
@@ -238,14 +239,14 @@ function JourneyEditorContent() {
         (nodeId: string) => {
             setNodes((nds) => nds.filter((n) => n.id !== nodeId));
             setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-            if (selectedNode?.id === nodeId) setSelectedNode(null);
+            if (selectedNodeId === nodeId) setSelectedNodeId(null);
             success("Removido", "Node excluído com sucesso.");
         },
         [setNodes, setEdges, selectedNode, success]
     );
 
     const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-        setSelectedNode(node);
+        setSelectedNodeId(node.id);
     }, []);
 
     const updateNodeData = useCallback(
