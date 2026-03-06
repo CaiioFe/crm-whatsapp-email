@@ -63,7 +63,7 @@ export default function LeadsPage() {
                 const [tagsRes, pipelineRes, leadsRes] = await Promise.all([
                     supabase.from('tags').select('*'),
                     supabase.from('pipelines').select('id').order('created_at').limit(1).single(),
-                    supabase.from('leads').select('*, lead_tags(tags(*))')
+                    supabase.from('leads').select('*, lead_tags(tags(*))').order('created_at', { ascending: false })
                 ]);
 
                 if (tagsRes.data) setTags(tagsRes.data);
