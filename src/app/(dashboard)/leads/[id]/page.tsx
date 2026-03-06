@@ -921,7 +921,9 @@ export default function LeadProfilePage() {
                         onClose={() => setShowEnrollModal(false)}
                         onEnroll={enrollInJourney}
                         leadName={lead.name}
-                        enrolledJourneyIds={enrollmentsList.map(e => e.journey_id)}
+                        enrolledJourneyIds={enrollmentsList
+                            .filter(e => ['active', 'paused'].includes(e.status))
+                            .map(e => e.journeys?.id)}
                     />
                     <ConfirmModal
                         open={showDeleteModal}
