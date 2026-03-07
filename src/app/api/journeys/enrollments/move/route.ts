@@ -20,7 +20,18 @@ export async function POST(request: NextRequest) {
             return new Response(JSON.stringify({ error: "Missing parameters" }), { status: 400 });
         }
 
-        // 1. Verify and update
+        // 1. Cancel any currently pending or executing steps for this enrollment
+        await supabase
+            .from('journey_step_logs')
+            .update({
+                status: 'skipped',
+                completed_at: new Date().toISOString(),
+                result: { action: 'skipped_manually', detail: 'User moved lead to another step' }
+            })
+            .eq('enrollment_id', enrollment_id)
+            .in('status', ['executing', 'pending']);
+
+        // 2. Verify and update enrollment
         const { error } = await supabase
             .from('journey_enrollments')
             .update({

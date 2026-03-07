@@ -74,6 +74,11 @@ export default async function JourneyLogsPage({ searchParams }: { searchParams: 
                                                     <AlertCircle size={16} />
                                                     <span className="text-[10px] font-black uppercase tracking-widest">Falhou</span>
                                                 </div>
+                                            ) : log.status === 'skipped' ? (
+                                                <div className="flex items-center gap-2 text-zinc-500">
+                                                    <AlertCircle size={16} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Cancelado</span>
+                                                </div>
                                             ) : (
                                                 <div className="flex items-center gap-2 text-amber-500">
                                                     <Loader2 size={16} className="animate-spin" />
