@@ -95,10 +95,9 @@ export async function POST(req: NextRequest) {
                 conversation_id: convo.id,
                 tenant_id: tenantId,
                 direction: fromMe ? 'outbound' : 'inbound',
+                message_type: 'text',
                 body: textContent,
-                provider_message_id: msg.key.id,
-                status: 'delivered', // Evolution usually delivers immediately if we receive it
-                metadata: msg
+                status: 'delivered'
             });
 
             if (msgError) {

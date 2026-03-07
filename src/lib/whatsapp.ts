@@ -69,8 +69,8 @@ export async function logOutboundWhatsAppMessage(
                 conversation_id: convo.id,
                 tenant_id: tenantId,
                 direction: 'outbound',
+                message_type: 'text',
                 body: textContent,
-                provider_message_id: providerMessageId,
                 status: 'delivered'
             });
         }
