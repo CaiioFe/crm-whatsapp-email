@@ -4,6 +4,7 @@
 // ============================================================
 
 import { SupabaseClient } from "@supabase/supabase-js";
+import { logOutboundWhatsAppMessage } from "@/lib/whatsapp";
 
 export interface CanvasNode {
     id: string;
@@ -398,6 +399,18 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                             if (response.ok) {
                                 console.log(`[JOURNEY] WhatsApp sent to ${leadPhone}: ${content.substring(0, 30)}...`);
                                 executionResult = { success: true, channel: 'whatsapp', result: resData };
+
+                                // Make sure this shows in the chat dashboard
+                                const messageId = resData?.key?.id || `msg_${Date.now()}`;
+                                await logOutboundWhatsAppMessage(
+                                    supabase,
+                                    enrollment.tenant_id,
+                                    leadPhone,
+                                    content,
+                                    messageId,
+                                    lead?.id,
+                                    lead?.name
+                                );
                             } else {
                                 // Save resData in the log result even on failure
                                 const error = new Error(resData.message || "Evolution API Error") as any;

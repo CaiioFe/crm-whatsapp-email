@@ -4,6 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { logOutboundWhatsAppMessage } from "@/lib/whatsapp";
 
 export async function POST(
     request: NextRequest,
@@ -71,6 +72,18 @@ export async function POST(
             });
 
             const data = await response.json();
+
+            if (response.ok) {
+                const messageId = data?.key?.id || `msg_${Date.now()}`;
+                await logOutboundWhatsAppMessage(
+                    supabase,
+                    profile.tenant_id,
+                    number,
+                    text,
+                    messageId
+                );
+            }
+
             return new Response(JSON.stringify(data), { status: response.status });
         }
 
