@@ -389,7 +389,8 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                                     text: content,
                                     delay: 1200,
                                     linkPreview: false // Default to false to avoid issues
-                                })
+                                }),
+                                signal: AbortSignal.timeout(15000)
                             });
 
                             const resData = await response.json();
@@ -455,8 +456,9 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
 
                 await supabase.from('journey_step_logs').update({
                     status: 'pending',
-                    metadata: { waiting_until: nextRun }
-                }).eq('id', logEntry?.id);
+                    result: { waiting_until: nextRun }
+                }).eq('id', logEntry?.id)
+                    .then(({ error }) => { if (error) console.error("Update wait status failed", error); });
                 return;
 
             default:
@@ -504,9 +506,8 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
                 updated_at: new Date().toISOString()
             }).eq('id', enrollmentId);
 
-            // Continue execution to next step
-            // We use setTimeout to break the stack and allow async completion
-            setTimeout(() => executeStep(supabase, enrollmentId), 100);
+            // Continue execution to next step synchronously in serverless to prevent stalling
+            await executeStep(supabase, enrollmentId);
         } else {
             // Journey finished
             await supabase.from('journey_enrollments').update({
@@ -521,14 +522,21 @@ export async function executeStep(supabase: SupabaseClient, enrollmentId: string
             } catch { }
         }
 
-    } catch (err) {
-        console.error(`Error executing journey step ${currentStep.id}:`, err);
+    } catch (err: any) {
+        console.error(`[JOURNEY] Error executing journey step ${currentStep?.id}:`, err);
+
+        let safeResult = {};
+        try {
+            safeResult = err.result ? JSON.parse(JSON.stringify(err.result)) : {};
+        } catch { } // ensure valid jsonb
+
         await supabase.from('journey_step_logs').update({
             status: 'failed',
             error_message: err instanceof Error ? err.message : String(err),
-            result: (err as any).result || {}, // Attempt to grab result from error context
+            result: safeResult,
             completed_at: new Date().toISOString()
-        }).eq('id', logEntry?.id);
+        }).eq('id', logEntry?.id)
+            .then(({ error }) => { if (error) console.error("[JOURNEY] Fail update error:", error); });
     }
 }
 

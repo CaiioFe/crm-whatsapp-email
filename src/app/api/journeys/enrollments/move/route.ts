@@ -36,10 +36,8 @@ export async function POST(request: NextRequest) {
         // We don't mark target_step_id as completed because we WANT the engine to execute it.
         // Instead, we just trigger the engine immediately!
 
-        // Execute the new step asynchronously without awaiting so the API returns quickly
-        executeStep(supabase, enrollment_id).catch(err => {
-            console.error("[MOVE_STEP] Background execution error:", err);
-        });
+        // Execute the new step synchronously before closing the request to ensure Vercel doesn't kill it.
+        await executeStep(supabase, enrollment_id);
 
         return new Response(JSON.stringify({ success: true }), {
             status: 200,

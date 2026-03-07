@@ -118,19 +118,19 @@ export default async function DashboardPage() {
                 />
                 <DashboardStatCard
                     label="Taxa de Resposta"
-                    value="24.8%"
+                    value="Em breve"
                     icon={TrendingUp}
-                    change="+2.4%"
-                    trend="up"
+                    change="WIP"
+                    trend="neutral"
                     color="#22c55e"
                     description="Performance de campanhas"
                 />
                 <DashboardStatCard
                     label="Agendamentos"
-                    value="14"
+                    value="Em breve"
                     icon={Calendar}
-                    change="-5%"
-                    trend="down"
+                    change="WIP"
+                    trend="neutral"
                     color="#3b82f6"
                     description="Reuniões para esta semana"
                 />
